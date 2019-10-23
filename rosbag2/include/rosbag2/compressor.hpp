@@ -27,16 +27,18 @@ namespace rosbag2 {
 // default buffer length used to read a file from disk and compress
 const int COMPRESSOR_BUFFER_LENGTH_DEFAULT = 4194304*2; // 4 megabytes, todo need to find a sane default
 
+struct CompressionState {
+    bool compression_success;
+    std::string compressed_uri;
+};
+
 /**
  * Class used to compress bag files
  */
 class Compressor
 {
 public:
-
-    //todo type
-    //todo interface
-
+    
     Compressor() = default;
     virtual ~Compressor() = default;
 
@@ -44,38 +46,48 @@ public:
      * Compress a file on disk.
      *
      * @param uri input file to compress
-     * @return the compressed file's uri
+     * @return
      */
-    virtual std::string compress_uri(std::string uri, int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) {
+    virtual CompressionState compress_uri(std::string uri, int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) {
 
       std::cout << "Compressor::compress_uri:" << uri << std::endl;
+      CompressionState compression_state;
+      try {
 
-      std::ifstream in(uri);
-      std::string compressed_uri = uri_to_compressed_uri(uri);
-      std::ofstream out(compressed_uri);
+        std::ifstream in(uri);
+        std::string compressed_uri = uri_to_compressed_uri(uri);
+        std::ofstream out(compressed_uri);
 
-      //todo check input file size
-      // if less then the buffer length then use that
+        //todo check input file size
+        // if less then the buffer length then use that
 
-      std::string compressed_file = uri_to_compressed_uri(uri);
+        std::string compressed_file = uri_to_compressed_uri(uri);
+        compression_state.compressed_uri = compressed_file;
 
-      char * buffer = new char [buffer_length_];
+        char * buffer = new char [buffer_length];
 
-      while(!in.eof()) {
-        std::string compressed_output;
-        in.read(buffer, buffer_length_);
+        while(!in.eof()) {
+          std::string compressed_output;
+          in.read(buffer, buffer_length);
 
-        // todo call abstract implementation method that wraps the specific API
-        snappy::Compress(buffer, in.gcount(), &compressed_output);
+          // todo call abstract implementation method that wraps the specific API
+          snappy::Compress(buffer, in.gcount(), &compressed_output);
 
-        out << compressed_output;
+          out << compressed_output;
+        }
+
+        in.close();// todo delete in from disk? if successfully compressed?
+        out.close();
+        compression_state.compression_success = true;
+
+      } catch (...) {
+        compression_state.compression_success = false;
       }
 
-      in.close();// todo delete in from disk? if successfully compressed?
-      out.close();
+      std::cout << "Compressor::compression_success:" << compression_state.compression_success  << std::endl;
+      std::cout << "Compressor::compressed_uri:" << compression_state.compressed_uri  << std::endl;
 
-      std::cout << "Compressor::compressed_file:" << compressed_uri << std::endl;
-      return compressed_uri;
+      return compression_state;
     }
 
     // todo should be abstract

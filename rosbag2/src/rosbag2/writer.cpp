@@ -165,8 +165,15 @@ void Writer::split_bagfile()
 
   compressor_->compress_uri(current_uri);
   auto end = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
-  std::cout << "Compression took " << duration.count() << " seconds" << std::endl;
+
+  // todo wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
+  // https://github.com/HowardHinnant/date
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  std::cout << "Compression took " << duration.count() << " milliseconds" << std::endl;
+
+  // todo what happens if compression fails for a single file?
+
+  relative_file_paths_.push_back(compression_state.compression_success ? compression_state.compressed_uri : bagfile_uri);
 }
 
 void Writer::write(std::shared_ptr<SerializedBagMessage> message)
@@ -195,7 +202,7 @@ void Writer::write(std::shared_ptr<SerializedBagMessage> message)
 
   storage_->write(converter_ ? converter_->convert(message) : message);
 }
-
+// TODO fixme
 bool Writer::should_split_bagfile() const
 {
 //  if (max_bagfile_size_ == rosbag2_storage::storage_interfaces::MAX_BAGFILE_SIZE_NO_SPLIT) {
@@ -204,7 +211,7 @@ bool Writer::should_split_bagfile() const
 //    return storage_->get_bagfile_size() > max_bagfile_size_;
 //  }
 
-  return bagfile_size > 1024 * 30; // todo hardcoded for PoC, command line split size (-b) was not in this branch
+  return storage_->get_bagfile_size() > 1024 * 100; // todo hardcoded for PoC, command line split size (-b) was not in this branch
 }
 
 void Writer::finalize_metadata()
@@ -223,6 +230,8 @@ void Writer::finalize_metadata()
     metadata_.topics_with_message_count.push_back(topic.second);
     metadata_.message_count += topic.second.message_count;
   }
+  // todo mark if compression is inactive (sane, defined default - null / empty string?) vs provided via the CLI
+  metadata.compression_identifier = "SNAPPY";
 }
 
 }  // namespace rosbag2
