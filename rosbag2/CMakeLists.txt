@@ -45,7 +45,9 @@ add_library(${PROJECT_NAME} SHARED
   src/rosbag2/serialization_format_converter_factory.cpp
   src/rosbag2/typesupport_helpers.cpp
   src/rosbag2/writer.cpp
-  src/rosbag2/types/introspection_message.cpp)
+  src/rosbag2/types/introspection_message.cpp
+  /usr/lib/x86_64-linux-gnu/libsnappy.so # done for poc (apt install libsnappy-dev)
+)
 
 ament_target_dependencies(${PROJECT_NAME}
   ament_index_cpp
@@ -70,6 +72,9 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE "ROSBAG2_BUILDING_DLL")
 
 # prevent pluginlib from using boost
 target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
+
+# done for the PoC
+target_link_libraries(${PROJECT_NAME} /usr/lib/x86_64-linux-gnu/libsnappy.so)
 
 install(
   DIRECTORY include/

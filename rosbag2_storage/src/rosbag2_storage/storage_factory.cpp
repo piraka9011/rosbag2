@@ -30,7 +30,8 @@ using rosbag2_storage::storage_interfaces::ReadOnlyInterface;
 using rosbag2_storage::storage_interfaces::ReadWriteInterface;
 
 StorageFactory::StorageFactory()
-: impl_(new StorageFactoryImpl())
+: impl_(new StorageFactoryImpl()),
+  current_uri_(std::string(""))
 {}
 
 // needed explicit destructor because of unique_ptr for pimpl
@@ -39,12 +40,19 @@ StorageFactory::~StorageFactory() {}
 std::shared_ptr<ReadOnlyInterface> StorageFactory::open_read_only(
   const std::string & uri, const std::string & storage_id)
 {
+  current_uri_ = uri;
   return impl_->open_read_only(uri, storage_id);
 }
 
 std::shared_ptr<ReadWriteInterface> StorageFactory::open_read_write(
   const std::string & uri, const std::string & storage_id)
 {
+  current_uri_ = uri;
   return impl_->open_read_write(uri, storage_id);
 }
+
+std::string StorageFactory::get_current_uri() {
+  return current_uri_;
+}
+
 }  // namespace rosbag2_storage

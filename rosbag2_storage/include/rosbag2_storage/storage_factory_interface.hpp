@@ -35,6 +35,8 @@ public:
 
   virtual std::shared_ptr<storage_interfaces::ReadWriteInterface>
   open_read_write(const std::string & uri, const std::string & storage_id) = 0;
+
+  virtual std::string get_current_uri() = 0;
 };
 
 }  // namespace rosbag2_storage

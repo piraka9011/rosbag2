@@ -26,6 +26,7 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <iostream>
 
 namespace rosbag2_storage
 {

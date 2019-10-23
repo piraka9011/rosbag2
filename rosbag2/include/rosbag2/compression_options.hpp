@@ -1,4 +1,4 @@
-// Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2018, Bosch Software Innovations GmbH.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "rosbag2_storage/storage_interfaces/base_io_interface.hpp"
+#ifndef ROSBAG2__COMPRESSION_OPTIONS_HPP_
+#define ROSBAG2__COMPRESSION_OPTIONS_HPP_
 
-namespace rosbag2_storage
+#include <string>
+
+namespace rosbag2
 {
-namespace storage_interfaces
-{
-const uint64_t MAX_BAGFILE_SIZE_BYTES_NO_SPLIT = 0;
-}
-}
+
+    struct ConverterOptions
+    {
+        std::string compression_format; // does it make sense to have different input vs output?
+    };
+
+}  // namespace rosbag2
+
+#endif  // ROSBAG2__COMPRESSION_OPTIONS_HPP_

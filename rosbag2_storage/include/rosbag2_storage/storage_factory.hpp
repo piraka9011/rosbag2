@@ -50,8 +50,15 @@ public:
   std::shared_ptr<storage_interfaces::ReadWriteInterface>
   open_read_write(const std::string & uri, const std::string & storage_id) override;
 
+  /**
+   * Return the current uri.
+   *
+   * \return the uri provided when open was called
+   */
+  std::string get_current_uri() override;
 private:
   std::unique_ptr<StorageFactoryImpl> impl_;
+  std::string current_uri_;
 };
 
 }  // namespace rosbag2_storage
