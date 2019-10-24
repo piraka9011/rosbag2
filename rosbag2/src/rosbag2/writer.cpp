@@ -25,6 +25,7 @@
 #include "rosbag2/storage_options.hpp"
 #include "rosbag2_storage/filesystem_helper.hpp"
 #include "rosbag2/compressor.hpp"
+#include <cstdio>
 
 namespace rosbag2
 {
@@ -43,6 +44,8 @@ Writer::Writer(
   metadata_()
 {
   compressor_ = std::make_unique<Compressor>();
+  // todo fixme, only needed for PoC
+  compression_options_.mode = CompressionMode::MESSAGE; // set to either FILE or MESSAGE to change the compression mode
 }
 
 Writer::~Writer()
@@ -152,28 +155,35 @@ void Writer::split_bagfile()
     throw std::runtime_error(errmsg.str());
   }
 
-  metadata_.relative_file_paths.push_back(storage_->get_relative_path());
 
   // Re-register all Topics since we rolled-over to a new bagfile.
   for (const auto & topic : topics_names_to_info_) {
     storage_->create_topic(topic.second.topic_metadata);
   }
 
-  std::cout << "COMPRESSING" << std::endl;
-  auto start = std::chrono::high_resolution_clock::now();
-  compressor_->hi();
+  if(compression_options_.mode == CompressionMode::FILE) {
 
-  compressor_->compress_uri(current_uri);
-  auto end = std::chrono::high_resolution_clock::now();
+    // todo start this in a new thread? most likely don't block....
+    std::cout << "COMPRESSING FILE" << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
+    auto compressed_uri = compressor_->compress_uri(current_uri);
+    auto end = std::chrono::high_resolution_clock::now();
 
-  // todo wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
-  // https://github.com/HowardHinnant/date
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  std::cout << "Compression took " << duration.count() << " milliseconds" << std::endl;
+    // todo wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
+    // https://github.com/HowardHinnant/date
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Compression took " << duration.count() << " milliseconds" << std::endl;
 
-  // todo what happens if compression fails for a single file?
+    // todo what happens if compression fails for a single file?
+    metadata_.relative_file_paths.push_back(compressed_uri);
 
-  relative_file_paths_.push_back(compression_state.compression_success ? compression_state.compressed_uri : bagfile_uri);
+    // delete file
+    std::cout << "Deleting original bagfile " << bagfile_uri << std::endl;
+    std::remove(bagfile_uri.c_str());
+
+  } else {
+    metadata_.relative_file_paths.push_back(storage_->get_relative_path());
+  }
 }
 
 void Writer::write(std::shared_ptr<SerializedBagMessage> message)
@@ -199,8 +209,14 @@ void Writer::write(std::shared_ptr<SerializedBagMessage> message)
   // TODO compress a single message
   // if we need to compress a single message, then compress here
   // message has a shared pointer to serailzied data, compress that then pass)
+  if(compression_options_.mode == CompressionMode::MESSAGE) {
 
-  storage_->write(converter_ ? converter_->convert(message) : message);
+    auto converted_message = converter_ ? converter_->convert(message) : message;
+    storage_->write(compressor_->compress_bag_message_data(converted_message));
+
+  } else {
+    storage_->write(converter_ ? converter_->convert(message) : message);
+  }
 }
 // TODO fixme
 bool Writer::should_split_bagfile() const
@@ -231,7 +247,7 @@ void Writer::finalize_metadata()
     metadata_.message_count += topic.second.message_count;
   }
   // todo mark if compression is inactive (sane, defined default - null / empty string?) vs provided via the CLI
-  metadata.compression_identifier = "SNAPPY";
+  metadata.compression_identifier = compressor_->get_compression_identifier();
 }
 
 }  // namespace rosbag2

@@ -20,9 +20,15 @@
 namespace rosbag2
 {
 
-    struct ConverterOptions
+    enum CompressionMode {
+        FILE,
+        MESSAGE,
+    };
+
+    struct CompressionOptions
     {
         std::string compression_format; // does it make sense to have different input vs output?
+        CompressionMode mode;
     };
 
 }  // namespace rosbag2

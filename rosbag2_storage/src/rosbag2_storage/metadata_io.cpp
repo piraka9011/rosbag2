@@ -141,7 +141,6 @@ struct convert<rosbag2_storage::BagMetadata>
     metadata.message_count = node["message_count"].as<uint64_t>();
     metadata.topics_with_message_count =
       node["topics_with_message_count"].as<std::vector<rosbag2_storage::TopicInformation>>();
-    // todo handle if missing?
     metadata.compression_identifier = node["compression_identifier"].as<std::string>();
     return true;
   }

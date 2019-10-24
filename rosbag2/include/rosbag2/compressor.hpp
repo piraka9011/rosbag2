@@ -18,92 +18,122 @@
 
 
 #include <iostream>
-#include "snappy.h"
 #include <string>
 #include <fstream>
+
+#include <zstd.h>
+#include "snappy.h"
+#include <cstdint>
+
+#include "rcutils/logging_macros.h"
+
 
 namespace rosbag2 {
 
 // default buffer length used to read a file from disk and compress
-const int COMPRESSOR_BUFFER_LENGTH_DEFAULT = 4194304*2; // 4 megabytes, todo need to find a sane default
-
-struct CompressionState {
-    bool compression_success;
-    std::string compressed_uri;
-};
+    const int COMPRESSOR_BUFFER_LENGTH_DEFAULT = 4194304 * 2; // 4 megabytes, todo need to find a sane default
 
 /**
  * Class used to compress bag files
  */
-class Compressor
-{
-public:
-    
-    Compressor() = default;
-    virtual ~Compressor() = default;
 
-    /**
-     * Compress a file on disk.
-     *
-     * @param uri input file to compress
-     * @return
-     */
-    virtual CompressionState compress_uri(std::string uri, int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) {
+    class Compressor {
+    public:
 
-      std::cout << "Compressor::compress_uri:" << uri << std::endl;
-      CompressionState compression_state;
-      try {
+        Compressor() = default;
+        virtual ~Compressor() = default;
 
-        std::ifstream in(uri);
-        std::string compressed_uri = uri_to_compressed_uri(uri);
-        std::ofstream out(compressed_uri);
+        /**
+         * Compress a file on disk.
+         *
+         * @param uri input file to compress
+         * @return
+         */
+        virtual std::string compress_uri(std::string uri, int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) {
 
-        //todo check input file size
-        // if less then the buffer length then use that
+          std::cout << "Compressor::compress_uri:" << uri << std::endl;
 
-        std::string compressed_file = uri_to_compressed_uri(uri);
-        compression_state.compressed_uri = compressed_file;
+          std::ifstream in(uri);
+          std::string compressed_uri = uri_to_compressed_uri(uri);
+          std::ofstream out(compressed_uri);
 
-        char * buffer = new char [buffer_length];
+          char *buffer = new char[buffer_length];
 
-        while(!in.eof()) {
-          std::string compressed_output;
-          in.read(buffer, buffer_length);
+          while (!in.eof()) {
+            std::string compressed_output;
+            in.read(buffer, buffer_length);
 
-          // todo call abstract implementation method that wraps the specific API
-          snappy::Compress(buffer, in.gcount(), &compressed_output);
+            // todo call abstract implementation method that wraps the specific API
+            //todo ZSTD Streaming: https://github.com/facebook/zstd/blob/dev/examples/streaming_compression.c
+            snappy::Compress(buffer, in.gcount(), &compressed_output);
 
-          out << compressed_output;
+            // todo end abstraction
+            // if the compression above fails, should throw
+
+            out << compressed_output;
+          }
+
+          in.close();
+          out.close();
+
+          std::cout << "Compressor::compressed_uri:" << compressed_uri << std::endl;
+
+          return compressed_uri;
         }
 
-        in.close();// todo delete in from disk? if successfully compressed?
-        out.close();
-        compression_state.compression_success = true;
+        // todo should be abstract
+        /**
+         * Return the uri to use for the compressed file.
+         *
+         * @param uri original file uri
+         * @return the compressed file uri
+         */
+        virtual std::string uri_to_compressed_uri(std::string uri) {
+          return uri + ".compressed_poc";
+        }
 
-      } catch (...) {
-        compression_state.compression_success = false;
-      }
+        //todo interface
+        virtual std::shared_ptr<SerializedBagMessage> compress_bag_message_data(std::shared_ptr<SerializedBagMessage> to_compress) {
 
-      std::cout << "Compressor::compression_success:" << compression_state.compression_success  << std::endl;
-      std::cout << "Compressor::compressed_uri:" << compression_state.compressed_uri  << std::endl;
+          size_t length = to_compress->serialized_data->buffer_length;
+          size_t compress_bound = ZSTD_compressBound(length);
 
-      return compression_state;
-    }
+          // allocate a new buffer for the compressed data
+          auto compressed_buffer = new rcutils_uint8_array_t;
+          *compressed_buffer = rcutils_get_zero_initialized_uint8_array();
+          auto allocator = rcutils_get_default_allocator();
+          auto ret = rcutils_uint8_array_init(compressed_buffer, compress_bound, &allocator);
 
-    // todo should be abstract
-    /**
-     * Return the uri to use for the compressed file.
-     *
-     * @param uri original file uri
-     * @return the compressed file uri
-     */
-    virtual std::string uri_to_compressed_uri(std::string uri) {
-      return uri + ".snappy";
-    }
+          size_t compressed_size = ZSTD_compress(compressed_buffer->buffer,
+                  compress_bound, to_compress->serialized_data->buffer, length, 1);
 
-    //todo compress individual messages
-    //virtual std::string compress_bag_message_data(SerializedBagMessage to_compress){}
-};
+          std::cout << "compress_bag_message_data: original length=" << length << ", compressed length=" << compressed_size << ", ratio="
+                    << (float)length / (float)compressed_size << std::endl;
+
+          // free the uncompressed data
+          to_compress->serialized_data.reset();
+
+          // create the shared pointer with a deleter
+          auto compressed_data = std::shared_ptr<rcutils_uint8_array_t>(compressed_buffer,
+              [](rcutils_uint8_array_t * compressed_buffer) {
+                int error = rcutils_uint8_array_fini(compressed_buffer);
+                delete compressed_buffer;
+                if (error != RCUTILS_RET_OK) {
+                  RCUTILS_LOG_ERROR_NAMED(
+                    "compress_bag_message_data", "Leaking memory %i", error);
+                }
+              });
+
+          // update the bag with the compressed data
+          to_compress->serialized_data = compressed_data;
+          return to_compress;
+        }
+
+        //todo interface
+        virtual std::string get_compression_identifier() {
+          return "TESTING_POC";
+        }
+    };
 
 }  // namespace rosbag2
 

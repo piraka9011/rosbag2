@@ -47,6 +47,7 @@ add_library(${PROJECT_NAME} SHARED
   src/rosbag2/writer.cpp
   src/rosbag2/types/introspection_message.cpp
   /usr/lib/x86_64-linux-gnu/libsnappy.so # done for poc (apt install libsnappy-dev)
+  /usr/lib/x86_64-linux-gnu/libzstd.so # done for poc (apt install libsnappy-dev)
 )
 
 ament_target_dependencies(${PROJECT_NAME}
@@ -75,6 +76,7 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNC
 
 # done for the PoC
 target_link_libraries(${PROJECT_NAME} /usr/lib/x86_64-linux-gnu/libsnappy.so)
+target_link_libraries(${PROJECT_NAME} /usr/lib/x86_64-linux-gnu/libzstd.so)
 
 install(
   DIRECTORY include/
