@@ -34,6 +34,7 @@
 #include "player.hpp"
 #include "recorder.hpp"
 #include "rosbag2_node.hpp"
+#include "rosbag2/compression_options.hpp"
 
 namespace rosbag2_transport
 {
@@ -75,6 +76,22 @@ void Rosbag2Transport::record(
     ROSBAG2_TRANSPORT_LOG_ERROR("Failed to record: %s", e.what());
   }
 }
+
+  void Rosbag2Transport::record(
+    const StorageOptions & storage_options, const RecordOptions & record_options, const CompressionOptions & compression_options)
+  {
+    try {
+      writer_->open(
+        storage_options, {rmw_get_serialization_format(), record_options.rmw_serialization_format}, compression_options);
+
+      auto transport_node = setup_node(record_options.node_prefix);
+
+      Recorder recorder(writer_, transport_node);
+      recorder.record(record_options);
+    } catch (std::runtime_error & e) {
+      ROSBAG2_TRANSPORT_LOG_ERROR("Failed to record: %s", e.what());
+    }
+  }
 
 std::shared_ptr<Rosbag2Node> Rosbag2Transport::setup_node(std::string node_prefix)
 {

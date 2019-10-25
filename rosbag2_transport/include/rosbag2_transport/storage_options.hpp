@@ -18,11 +18,13 @@
 #include <string>
 
 #include "rosbag2/storage_options.hpp"
+#include "rosbag2/compression_options.hpp"
 
 namespace rosbag2_transport
 {
 
 using StorageOptions = rosbag2::StorageOptions;
+using CompressionOptions = rosbag2::CompressionOptions;
 
 }  // namespace rosbag2_transport
 

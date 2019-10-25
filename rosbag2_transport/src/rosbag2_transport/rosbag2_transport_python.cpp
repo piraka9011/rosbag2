@@ -26,6 +26,8 @@ static PyObject *
 rosbag2_transport_record(PyObject * Py_UNUSED(self), PyObject * args, PyObject * kwargs)
 {
   rosbag2_transport::StorageOptions storage_options{};
+  rosbag2_transport::CompressionOptions compression_options{};
+
   rosbag2_transport::RecordOptions record_options{};
 
   static const char * kwlist[] = {
@@ -37,6 +39,7 @@ rosbag2_transport_record(PyObject * Py_UNUSED(self), PyObject * args, PyObject *
     "no_discovery",
     "polling_interval",
     "topics",
+    "compression_mode",
     nullptr};
 
   char * uri = nullptr;
@@ -45,9 +48,10 @@ rosbag2_transport_record(PyObject * Py_UNUSED(self), PyObject * args, PyObject *
   char * node_prefix = nullptr;
   bool all = false;
   bool no_discovery = false;
+  char * compression_mode = nullptr;
   uint64_t polling_interval_ms = 100;
   PyObject * topics = nullptr;
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ssss|bbKO", const_cast<char **>(kwlist),
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ssss|bbKOs", const_cast<char **>(kwlist),
     &uri,
     &storage_id,
     &serilization_format,
@@ -55,10 +59,24 @@ rosbag2_transport_record(PyObject * Py_UNUSED(self), PyObject * args, PyObject *
     &all,
     &no_discovery,
     &polling_interval_ms,
-    &topics))
+    &topics,
+    &compression_mode
+    ))
   {
     return nullptr;
   }
+
+  compression_options.compression_format = "PoC";
+
+  std::string compression_mode_string = std::string(compression_mode);
+  if(compression_mode_string == "FILE") {
+    compression_options.mode = rosbag2::CompressionMode::FILE;
+  } else if(compression_mode_string == "MESSAGE") {
+    compression_options.mode = rosbag2::CompressionMode::MESSAGE;
+  } else {
+    compression_options.mode = rosbag2::CompressionMode::NONE;
+  }
+
 
   storage_options.uri = std::string(uri);
   storage_options.storage_id = std::string(storage_id);
@@ -66,7 +84,6 @@ rosbag2_transport_record(PyObject * Py_UNUSED(self), PyObject * args, PyObject *
   record_options.is_discovery_disabled = no_discovery;
   record_options.topic_polling_interval = std::chrono::milliseconds(polling_interval_ms);
   record_options.node_prefix = std::string(node_prefix);
-
   if (topics) {
     PyObject * topic_iterator = PyObject_GetIter(topics);
     if (topic_iterator != nullptr) {
@@ -85,7 +102,7 @@ rosbag2_transport_record(PyObject * Py_UNUSED(self), PyObject * args, PyObject *
 
   rosbag2_transport::Rosbag2Transport transport;
   transport.init();
-  transport.record(storage_options, record_options);
+  transport.record(storage_options, record_options, compression_options);
   transport.shutdown();
 
   Py_RETURN_NONE;

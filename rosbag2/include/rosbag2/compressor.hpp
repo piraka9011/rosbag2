@@ -104,6 +104,10 @@ namespace rosbag2 {
           auto allocator = rcutils_get_default_allocator();
           auto ret = rcutils_uint8_array_init(compressed_buffer, compress_bound, &allocator);
 
+          if(ret !=0 ) {
+            std::cout << "compress_bag_message_data: rcutils_uint8_array_init error:" << ret << std::endl;
+          }
+
           size_t compressed_size = ZSTD_compress(compressed_buffer->buffer,
                   compress_bound, to_compress->serialized_data->buffer, length, 1);
 

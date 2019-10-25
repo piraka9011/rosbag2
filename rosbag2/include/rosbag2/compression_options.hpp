@@ -21,13 +21,14 @@ namespace rosbag2
 {
 
     enum CompressionMode {
+        NONE,  // sane default
         FILE,
         MESSAGE,
     };
 
     struct CompressionOptions
     {
-        std::string compression_format; // does it make sense to have different input vs output?
+        std::string compression_format;
         CompressionMode mode;
     };
 

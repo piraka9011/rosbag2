@@ -72,6 +72,11 @@ public:
     const StorageOptions & storage_options,
     const ConverterOptions & converter_options);
 
+  virtual void open(
+  const StorageOptions & storage_options,
+  const ConverterOptions & converter_options,
+  const CompressionOptions & compression_options);
+
   /**
    * Create a new topic in the underlying storage. Needs to be called for every topic used within
    * a message which is passed to write(...).

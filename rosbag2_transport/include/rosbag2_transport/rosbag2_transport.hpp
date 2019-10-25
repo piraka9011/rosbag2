@@ -66,7 +66,8 @@ public:
    */
   ROSBAG2_TRANSPORT_PUBLIC
   void record(const StorageOptions & storage_options, const RecordOptions & record_options);
-
+  void record(
+    const StorageOptions & storage_options, const RecordOptions & record_options, const CompressionOptions & compression_options);
   /**
    * Replay all topics in a bagfile.
    *

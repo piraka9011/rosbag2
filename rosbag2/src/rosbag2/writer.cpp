@@ -69,6 +69,16 @@ void Writer::init_metadata()
 }
 
 void Writer::open(
+    const StorageOptions & storage_options,
+    const ConverterOptions & converter_options,
+    const CompressionOptions & compression_options)
+{
+  compression_options_ = compression_options;
+  std::cout << "Compression Mode is: " << compression_options.mode << std::endl;
+  open(storage_options, converter_options);
+}
+
+void Writer::open(
   const StorageOptions & storage_options,
   const ConverterOptions & converter_options)
 {
