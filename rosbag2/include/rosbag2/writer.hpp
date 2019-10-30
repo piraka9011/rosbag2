@@ -73,9 +73,9 @@ public:
     const ConverterOptions & converter_options);
 
   virtual void open(
-  const StorageOptions & storage_options,
-  const ConverterOptions & converter_options,
-  const CompressionOptions & compression_options);
+    const StorageOptions & storage_options,
+    const ConverterOptions & converter_options,
+    const CompressionOptions & compression_options);
 
   /**
    * Create a new topic in the underlying storage. Needs to be called for every topic used within
@@ -133,6 +133,8 @@ private:
 
   // Record TopicInformation into metadata
   void finalize_metadata();
+
+  void compress_file(std::string uri_to_compress);
 };
 
 }  // namespace rosbag2

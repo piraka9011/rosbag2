@@ -20,17 +20,18 @@
 namespace rosbag2
 {
 
-    enum CompressionMode {
-        NONE,  // sane default
-        FILE,
-        MESSAGE,
-    };
+enum CompressionMode
+{
+  NONE,        // sane default
+  FILE,
+  MESSAGE,
+};
 
-    struct CompressionOptions
-    {
-        std::string compression_format;
-        CompressionMode mode;
-    };
+struct CompressionOptions
+{
+  std::string compression_format;
+  CompressionMode mode;
+};
 
 }  // namespace rosbag2
 

@@ -30,6 +30,25 @@
 namespace rosbag2
 {
 
+namespace
+{
+std::string format_storage_uri(const std::string & base_folder, uint64_t storage_count)
+{
+  // Right now `base_folder_` is always just the folder name for where to install the bagfile.
+  // The name of the folder needs to be queried in case Writer is opened with a relative path.
+  std::stringstream storage_file_name;
+  storage_file_name << rosbag2_storage::FilesystemHelper::get_folder_name(base_folder);
+
+  // Only append the counter after we have split.
+  // This is so bagfiles have the old naming convention if splitting is disabled.
+  if (storage_count > 0) {
+    storage_file_name << "_" << storage_count;
+  }
+
+  return rosbag2_storage::FilesystemHelper::concat({base_folder, storage_file_name.str()});
+}
+}  // namespace
+
 Writer::Writer(
   std::unique_ptr<rosbag2_storage::StorageFactoryInterface> storage_factory,
   std::shared_ptr<SerializationFormatConverterFactoryInterface> converter_factory,
@@ -39,17 +58,23 @@ Writer::Writer(
   storage_(nullptr),
   metadata_io_(std::move(metadata_io)),
   converter_(nullptr),
-  max_bagfile_size_(rosbag2_storage::storage_interfaces::MAX_BAGFILE_SIZE_NO_SPLIT),
+  max_bagfile_size_(rosbag2_storage::storage_interfaces::MAX_BAGFILE_SIZE_BYTES_NO_SPLIT),
   topics_names_to_info_(),
   metadata_()
 {
   compressor_ = std::make_unique<Compressor>();
-  // todo fixme, only needed for PoC
-  compression_options_.mode = CompressionMode::MESSAGE; // set to either FILE or MESSAGE to change the compression mode
 }
 
 Writer::~Writer()
 {
+  //todo is the dtor really a good place to finalize all this?
+  auto const current_uri = storage_->get_relative_path();
+  if (compression_options_.mode == CompressionMode::FILE) {
+    compress_file(current_uri);
+  } else {
+    metadata_.relative_file_paths.push_back(current_uri);
+  }
+
   if (!base_folder_.empty()) {
     finalize_metadata();
     metadata_io_->write_metadata(base_folder_, metadata_);
@@ -65,13 +90,13 @@ void Writer::init_metadata()
   metadata_.storage_identifier = storage_->get_storage_identifier();
   metadata_.starting_time = std::chrono::time_point<std::chrono::high_resolution_clock>(
     std::chrono::nanoseconds::max());
-  metadata_.relative_file_paths = {storage_->get_relative_path()};
+  metadata_.relative_file_paths = {storage_->get_relative_path()}; //todo fixme when compressing this isn't valid
 }
 
 void Writer::open(
-    const StorageOptions & storage_options,
-    const ConverterOptions & converter_options,
-    const CompressionOptions & compression_options)
+  const StorageOptions & storage_options,
+  const ConverterOptions & converter_options,
+  const CompressionOptions & compression_options)
 {
   compression_options_ = compression_options;
   std::cout << "Compression Mode is: " << compression_options.mode << std::endl;
@@ -150,50 +175,51 @@ void Writer::remove_topic(const TopicMetadata & topic_with_type)
 
 void Writer::split_bagfile()
 {
-  // the current, active file
-  auto current_uri = storage_factory_->get_current_uri();
-  // the file which we will rollover to when splitting
-  const auto storage_uri = format_storage_uri(
+
+  const auto current_uri = storage_->get_relative_path();
+  const auto storage_uri_rollover = format_storage_uri(
     base_folder_,
     metadata_.relative_file_paths.size());
-  storage_ = storage_factory_->open_read_write(storage_uri, metadata_.storage_identifier);
+  storage_ = storage_factory_->open_read_write(storage_uri_rollover, metadata_.storage_identifier);
 
   if (!storage_) {
     std::stringstream errmsg;
-    errmsg << "Failed to rollover bagfile to new file: \"" << storage_uri << "\"!";
-
+    errmsg << "Failed to rollover bagfile to new file: \"" << storage_uri_rollover << "\"!";
     throw std::runtime_error(errmsg.str());
   }
-
 
   // Re-register all Topics since we rolled-over to a new bagfile.
   for (const auto & topic : topics_names_to_info_) {
     storage_->create_topic(topic.second.topic_metadata);
   }
 
-  if(compression_options_.mode == CompressionMode::FILE) {
-
-    // todo start this in a new thread? most likely don't block....
-    std::cout << "COMPRESSING FILE" << std::endl;
-    auto start = std::chrono::high_resolution_clock::now();
-    auto compressed_uri = compressor_->compress_uri(current_uri);
-    auto end = std::chrono::high_resolution_clock::now();
-
-    // todo wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
-    // https://github.com/HowardHinnant/date
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Compression took " << duration.count() << " milliseconds" << std::endl;
-
-    // todo what happens if compression fails for a single file?
-    metadata_.relative_file_paths.push_back(compressed_uri);
-
-    // delete file
-    std::cout << "Deleting original bagfile " << bagfile_uri << std::endl;
-    std::remove(bagfile_uri.c_str());
-
+  if (compression_options_.mode == CompressionMode::FILE) {
+    compress_file(current_uri);
   } else {
-    metadata_.relative_file_paths.push_back(storage_->get_relative_path());
+    metadata_.relative_file_paths.push_back(current_uri);
   }
+}
+
+void Writer::compress_file(std::string uri_to_compress)
+{
+
+  // todo start this in a new thread? most likely don't block....
+  std::cout << "COMPRESSING FILE" << std::endl;
+  auto start = std::chrono::high_resolution_clock::now();
+  auto compressed_uri = compressor_->compress_uri(uri_to_compress);
+  auto end = std::chrono::high_resolution_clock::now();
+
+  // todo wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
+  // https://github.com/HowardHinnant/date
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  std::cout << "Compression took " << duration.count() << " milliseconds" << std::endl;
+
+  // todo what happens if compression fails for a single file?
+  metadata_.relative_file_paths.push_back(compressed_uri);
+
+  // delete file
+  std::cout << "Deleting original bagfile " << uri_to_compress << std::endl;
+  std::remove(uri_to_compress.c_str());
 }
 
 void Writer::write(std::shared_ptr<SerializedBagMessage> message)
@@ -219,7 +245,7 @@ void Writer::write(std::shared_ptr<SerializedBagMessage> message)
   // TODO compress a single message
   // if we need to compress a single message, then compress here
   // message has a shared pointer to serailzied data, compress that then pass)
-  if(compression_options_.mode == CompressionMode::MESSAGE) {
+  if (compression_options_.mode == CompressionMode::MESSAGE) {
 
     auto converted_message = converter_ ? converter_->convert(message) : message;
     storage_->write(compressor_->compress_bag_message_data(converted_message));
@@ -257,7 +283,7 @@ void Writer::finalize_metadata()
     metadata_.message_count += topic.second.message_count;
   }
   // todo mark if compression is inactive (sane, defined default - null / empty string?) vs provided via the CLI
-  metadata.compression_identifier = compressor_->get_compression_identifier();
+  metadata_.compression_identifier = compressor_->get_compression_identifier();
 }
 
 }  // namespace rosbag2
