@@ -41,6 +41,7 @@ find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 add_library(${PROJECT_NAME} SHARED
   src/rosbag2/converter.cpp
   src/rosbag2/compressor_poc.cpp
+  src/rosbag2/decompressor_poc.cpp
   src/rosbag2/info.cpp
   src/rosbag2/sequential_reader.cpp
   src/rosbag2/serialization_format_converter_factory.cpp
