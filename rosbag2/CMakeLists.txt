@@ -40,14 +40,15 @@ find_package(rosidl_typesupport_introspection_cpp REQUIRED)
 
 add_library(${PROJECT_NAME} SHARED
   src/rosbag2/converter.cpp
+  src/rosbag2/compressor_poc.cpp
   src/rosbag2/info.cpp
   src/rosbag2/sequential_reader.cpp
   src/rosbag2/serialization_format_converter_factory.cpp
   src/rosbag2/typesupport_helpers.cpp
   src/rosbag2/writer.cpp
   src/rosbag2/types/introspection_message.cpp
-  /usr/lib/x86_64-linux-gnu/libsnappy.so # done for poc (apt install libsnappy-dev)
-  /usr/lib/x86_64-linux-gnu/libzstd.so # done for poc (apt install libsnappy-dev)
+  /usr/lib/x86_64-linux-gnu/libsnappy.so # FIXME done for poc (apt install libsnappy-dev)
+  /usr/lib/x86_64-linux-gnu/libzstd.so # FIXME done for poc (apt install libzstd-dev)
 )
 
 ament_target_dependencies(${PROJECT_NAME}
@@ -74,7 +75,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE "ROSBAG2_BUILDING_DLL")
 # prevent pluginlib from using boost
 target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
 
-# done for the PoC
+# FIXME done for the PoC
 target_link_libraries(${PROJECT_NAME} /usr/lib/x86_64-linux-gnu/libsnappy.so)
 target_link_libraries(${PROJECT_NAME} /usr/lib/x86_64-linux-gnu/libzstd.so)
 

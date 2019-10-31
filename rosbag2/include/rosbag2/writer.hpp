@@ -29,7 +29,7 @@
 #include "rosbag2/storage_options.hpp"
 #include "rosbag2/types.hpp"
 #include "rosbag2/visibility_control.hpp"
-#include "rosbag2/compressor.hpp"
+#include "rosbag2/compressor_poc.hpp"
 #include "rosbag2/compression_options.hpp"
 
 // This is necessary because of using stl types here. It is completely safe, because
@@ -111,7 +111,7 @@ private:
   std::shared_ptr<rosbag2_storage::storage_interfaces::ReadWriteInterface> storage_;
   std::unique_ptr<rosbag2_storage::MetadataIo> metadata_io_;
   std::unique_ptr<Converter> converter_;
-  std::unique_ptr<Compressor> compressor_;
+  std::unique_ptr<CompressorPoC> compressor_;
   CompressionOptions compression_options_;
 
   // Used in bagfile splitting; specifies the best-effort maximum sub-section of a bagfile in bytes.

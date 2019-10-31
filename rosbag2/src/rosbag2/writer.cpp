@@ -24,7 +24,7 @@
 #include "rosbag2/info.hpp"
 #include "rosbag2/storage_options.hpp"
 #include "rosbag2_storage/filesystem_helper.hpp"
-#include "rosbag2/compressor.hpp"
+#include "rosbag2/compressor_poc.hpp"
 #include <cstdio>
 
 namespace rosbag2
@@ -62,7 +62,7 @@ Writer::Writer(
   topics_names_to_info_(),
   metadata_()
 {
-  compressor_ = std::make_unique<Compressor>();
+  compressor_ = std::make_unique<CompressorPoC>();
 }
 
 Writer::~Writer()
