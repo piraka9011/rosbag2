@@ -35,7 +35,7 @@ namespace rosbag2
  * @param uri input file to compress
  * @return
  */
-std::string CompressorPoC::compress_uri(std::string uri, int buffer_length)
+std::string CompressorPoC::compress_uri(const std::string & uri, int buffer_length)
 {
 
   std::cout << "Compressor:::" << uri << std::endl;
@@ -44,7 +44,7 @@ std::string CompressorPoC::compress_uri(std::string uri, int buffer_length)
   std::string compressed_uri = uri_to_compressed_uri(uri);
   std::ofstream out(compressed_uri);
 
-  char * buffer = new char[buffer_length];
+  char * buffer = new char[buffer_length];  // todo could probably only allocate once if the buffer length is a constructor arg
 
   while (!in.eof()) {
     std::string compressed_output;
@@ -64,7 +64,7 @@ std::string CompressorPoC::compress_uri(std::string uri, int buffer_length)
   out.close();
 
   std::cout << "Compressor::compressed_uri:" << compressed_uri << std::endl;
-
+  delete buffer;
   return compressed_uri;
 }
 
@@ -74,13 +74,13 @@ std::string CompressorPoC::compress_uri(std::string uri, int buffer_length)
  * @param uri original file uri
  * @return the compressed file uri
  */
-std::string CompressorPoC::uri_to_compressed_uri(std::string uri)
+std::string CompressorPoC::uri_to_compressed_uri(const std::string & uri)
 {
   return uri + ".compressed_poc";
 }
 
 std::shared_ptr<SerializedBagMessage> CompressorPoC::compress_bag_message_data(
-  std::shared_ptr<SerializedBagMessage> to_compress)
+  std::shared_ptr<SerializedBagMessage> & to_compress)
 {
 
   size_t length = to_compress->serialized_data->buffer_length;
@@ -122,7 +122,7 @@ std::shared_ptr<SerializedBagMessage> CompressorPoC::compress_bag_message_data(
   return to_compress;
 }
 
-std::string CompressorPoC::get_compression_identifier()
+std::string CompressorPoC::get_compression_identifier() const
 {
   return "TESTING_POC";
 }

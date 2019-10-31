@@ -40,15 +40,15 @@ public:
   virtual ~CompressorPoC() = default;
 
   std::string compress_uri(
-    std::string uri,
+    const std::string & uri,
     int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) override;
 
-  std::string uri_to_compressed_uri(std::string uri) override;
+  std::string uri_to_compressed_uri(const std::string & uri) override;
 
   std::shared_ptr<SerializedBagMessage> compress_bag_message_data(
-    std::shared_ptr<SerializedBagMessage> to_compress) override;
+    std::shared_ptr<SerializedBagMessage> & to_compress) override;
 
-  std::string get_compression_identifier() override;
+  std::string get_compression_identifier() const override;
 };
 
 }  // namespace rosbag2

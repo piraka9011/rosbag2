@@ -23,7 +23,7 @@
 
 #include <zstd.h>
 #include "snappy.h"
-#include <cstdint> \
+#include <cstdint>
 
 #include "rosbag2/types.hpp"
 #include "rcutils/logging_macros.h"
@@ -33,12 +33,11 @@ namespace rosbag2
 {
 
 // default buffer length used to read a file from disk and compress
-constexpr const static int COMPRESSOR_BUFFER_LENGTH_DEFAULT = 4194304 * 2;     // 4 megabytes, todo need to find a sane default
+constexpr const static int COMPRESSOR_BUFFER_LENGTH_DEFAULT = 4194304 * 2;     // 8 megabytes, todo need to find a sane default
 
 /**
  * Interface used to compress bag files
  */
-
 class Compressor
 {
 public:
@@ -49,7 +48,7 @@ public:
    * @return
    */
   virtual std::string compress_uri(
-    std::string uri,
+    const std::string & uri,
     int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) = 0;
 
   /**
@@ -58,12 +57,12 @@ public:
    * @param uri original file uri
    * @return the compressed file uri
    */
-  virtual std::string uri_to_compressed_uri(std::string uri) = 0;
+  virtual std::string uri_to_compressed_uri(const std::string & uri) = 0;
 
   virtual std::shared_ptr<SerializedBagMessage> compress_bag_message_data(
-    std::shared_ptr<SerializedBagMessage> to_compress) = 0;
+    std::shared_ptr<SerializedBagMessage> & to_compress) = 0;
 
-  virtual std::string get_compression_identifier() = 0;
+  virtual std::string get_compression_identifier() const = 0;
 };
 
 }  // namespace rosbag2

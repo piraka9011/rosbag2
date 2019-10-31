@@ -34,7 +34,7 @@ public:
     std::shared_ptr<rosbag2_storage::storage_interfaces::ReadWriteInterface>(
       const std::string &, const std::string &));
   MOCK_METHOD0(get_current_uri,
-          std::string());
+    std::string());
 };
 
 #endif  // ROSBAG2__MOCK_STORAGE_FACTORY_HPP_
