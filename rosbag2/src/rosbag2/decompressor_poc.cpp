@@ -13,7 +13,17 @@
  * permissions and limitations under the License.
  */
 
+#include <iotream>
 #include "rosbag2/decompressor_poc.hpp"
+
+static void* malloc_orDie(size_t size)
+{
+  void* const buff = malloc(size);
+  if (buff) return buff;
+  /* error */
+  perror("malloc");
+  exit(8);  // Temp error code
+}
 
 namespace rosbag2
 {
@@ -25,6 +35,28 @@ std::string DecompressorPoC::decompress_uri(const std::string & uri, int buffer_
 std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_data(
   std::shared_ptr<SerializedBagMessage> & to_decompress)
 {
+  /// Extracted from https://github.com/facebook/zstd/blob/dev/examples/streaming_decompression.c
+  ZSTD_DCtx* const d_context = ZSTD_createDCtx();  // Decompression context
+  ZSTD_DStream * d_stream = ZSTD_createDStream();
+
+  /* Guarantee to successfully flush at least one complete compressed block in all circumstances. */
+  size_t const buff_out_size = ZSTD_DStreamOutSize();
+  void*  const buff_out = malloc_orDie(buff_out_size);
+
+  ZSTD_inBuffer input = { to_decompress->serialized_data->buffer,
+                          to_decompress->serialized_data->buffer_length, 0 };
+
+  size_t lastRet = 0;
+  std::make_shared<SerializedBagMessage>();
+  while (input.pos < input.size){
+    ZSTD_outBuffer output = {buff_out, buff_out_size, 0};
+    size_t const ret = ZSTD_decompressStream(d_context, &output , &input);
+    if (ZSTD_isError(ret)) {
+      std::cout << "Got a ZSTD Error: \n" << ZSTD_getErrorName(ret) << std::endl;
+    }
+    lastRet = ret;
+  }
+
   return std::make_shared<SerializedBagMessage>(
     to_decompress->serialized_data,
     to_decompress->time_stamp,
@@ -33,7 +65,7 @@ std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_da
 
 std::string DecompressorPoC::get_compression_identifier() const
 {
-  return "";
+  return "TESTING_POC";
 }
 
 }  // namespace rosbag2

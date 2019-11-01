@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "rosbag2/compression_options.hpp"
 #include "rosbag2/info.hpp"
 
 namespace rosbag2
@@ -83,7 +84,9 @@ std::shared_ptr<SerializedBagMessage> SequentialReader::read_next()
 {
   if (storage_) {
     auto message = storage_->read_next();
-    return converter_ ? converter_->convert(message) : message;
+    if (storage_->get_metadata().compression_identifier)
+    std::shared_ptr<SerializedBagMessage> returned_message = converter_ ? converter_->convert
+      (message) : message;
   }
   throw std::runtime_error("Bag is not open. Call open() before reading.");
 }
