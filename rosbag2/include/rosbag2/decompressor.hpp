@@ -27,20 +27,13 @@
 #include "rosbag2/types.hpp"
 #include "rcutils/logging_macros.h"
 
-// default buffer length used to read a file from disk and compress
-// 8 megabytes, TODO(dbbonnie) need to find a sane default
-constexpr const static int COMPRESSOR_BUFFER_LENGTH_DEFAULT = 4194304 * 2;
-
 namespace rosbag2
 {
-class DecompressorImpl;
 
 class Decompressor
 {
 public:
-  virtual std::string decompress_uri(
-    const std::string & uri,
-    int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) = 0;
+  virtual std::string decompress_uri(const std::string & uri) = 0;
 
   virtual std::shared_ptr<SerializedBagMessage> decompress_bag_message_data(
     std::shared_ptr<SerializedBagMessage> & to_decompress) = 0;

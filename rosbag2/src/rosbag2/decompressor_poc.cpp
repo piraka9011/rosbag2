@@ -13,8 +13,11 @@
  * permissions and limitations under the License.
  */
 
-#include <iotream>
+#include <iostream>
+
 #include "rosbag2/decompressor_poc.hpp"
+#include "rosbag2/logging.hpp"
+
 
 static void* malloc_orDie(size_t size)
 {
@@ -25,11 +28,52 @@ static void* malloc_orDie(size_t size)
   exit(8);  // Temp error code
 }
 
+std::string remove_extension(const std::string & filename)
+{
+  size_t last_dot = filename.find_last_of(".");
+  if (last_dot == std::string::npos) return filename;
+  return filename.substr(0, last_dot);
+}
+
 namespace rosbag2
 {
 
-std::string DecompressorPoC::decompress_uri(const std::string & uri, int buffer_length){
-  return uri;
+std::string DecompressorPoC::decompress_uri(const std::string & uri)
+{
+  ROSBAG2_LOG_INFO_STREAM("Decompressing " << uri);
+  std::ifstream infile(uri);
+  std::string compressed_contents;
+  std::string decompressed_output;
+  std::string new_file_uri;
+  if (infile)
+  {
+    // Get size and allocate
+    ROSBAG2_LOG_INFO_STREAM("Resizing compressed content holder.");
+    infile.seekg(0, std::ios::end);
+    compressed_contents.resize(infile.tellg());
+    // Go back and read in contents
+    ROSBAG2_LOG_INFO("Reading in contents to compressed_contents.");
+    infile.seekg(0, std::ios::beg);
+    infile.read(&compressed_contents[0], compressed_contents.size());
+    // Decompress
+    ROSBAG2_LOG_INFO("Decompressing...");
+    snappy::Uncompress(compressed_contents.c_str(), infile.gcount(), &decompressed_output);
+    // Remove .compress extension and write to file.
+    new_file_uri = remove_extension(uri);
+    ROSBAG2_LOG_INFO_STREAM("New File URI: " << new_file_uri);
+    std::ofstream outfile;
+    ROSBAG2_LOG_INFO("Writing to file.");
+    outfile.open(new_file_uri);
+    outfile << decompressed_output;
+    outfile.close();
+    infile.close();
+    return new_file_uri;
+  }
+  else
+  {
+    ROSBAG2_LOG_ERROR_STREAM("Unable to open compressed file.");
+    throw std::runtime_error("Unable to open file");
+  }
 }
 
 std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_data(
@@ -37,7 +81,7 @@ std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_da
 {
   /// Extracted from https://github.com/facebook/zstd/blob/dev/examples/streaming_decompression.c
   ZSTD_DCtx* const d_context = ZSTD_createDCtx();  // Decompression context
-  ZSTD_DStream * d_stream = ZSTD_createDStream();
+  //ZSTD_DStream * d_stream = ZSTD_createDStream();
 
   /* Guarantee to successfully flush at least one complete compressed block in all circumstances. */
   size_t const buff_out_size = ZSTD_DStreamOutSize();
@@ -46,7 +90,7 @@ std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_da
   ZSTD_inBuffer input = { to_decompress->serialized_data->buffer,
                           to_decompress->serialized_data->buffer_length, 0 };
 
-  size_t lastRet = 0;
+//  size_t lastRet = 0;
   std::make_shared<SerializedBagMessage>();
   while (input.pos < input.size){
     ZSTD_outBuffer output = {buff_out, buff_out_size, 0};
@@ -54,13 +98,10 @@ std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_da
     if (ZSTD_isError(ret)) {
       std::cout << "Got a ZSTD Error: \n" << ZSTD_getErrorName(ret) << std::endl;
     }
-    lastRet = ret;
+//    lastRet = ret;
   }
 
-  return std::make_shared<SerializedBagMessage>(
-    to_decompress->serialized_data,
-    to_decompress->time_stamp,
-    to_decompress->topic_name);
+  return std::make_shared<SerializedBagMessage>();
 }
 
 std::string DecompressorPoC::get_compression_identifier() const

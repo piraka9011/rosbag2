@@ -26,9 +26,7 @@ class DecompressorPoC : Decompressor
   DecompressorPoC() = default;
   virtual ~DecompressorPoC() = default;
 
-  std::string decompress_uri(
-    const std::string & uri,
-    int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) override ;
+  std::string decompress_uri(const std::string & uri) override ;
 
   std::shared_ptr<SerializedBagMessage> decompress_bag_message_data(
     std::shared_ptr<SerializedBagMessage> & to_decompress) override;

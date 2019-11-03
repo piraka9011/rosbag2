@@ -22,6 +22,7 @@
 #include "rosbag2_storage/storage_factory.hpp"
 #include "rosbag2_storage/storage_factory_interface.hpp"
 #include "rosbag2_storage/storage_interfaces/read_only_interface.hpp"
+#include "rosbag2/compression_options.hpp"
 #include "rosbag2/converter.hpp"
 #include "rosbag2/serialization_format_converter_factory.hpp"
 #include "rosbag2/serialization_format_converter_factory_interface.hpp"
