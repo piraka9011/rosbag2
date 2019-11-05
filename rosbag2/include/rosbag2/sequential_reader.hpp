@@ -105,6 +105,7 @@ private:
   std::shared_ptr<SerializationFormatConverterFactoryInterface> converter_factory_;
   std::shared_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> storage_;
   std::unique_ptr<Converter> converter_;
+  std::unique_ptr<rosbag2_storage::BagMetadata> metadata_;
 };
 
 }  // namespace rosbag2

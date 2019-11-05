@@ -113,6 +113,8 @@ struct convert<std::chrono::time_point<std::chrono::high_resolution_clock>>
   }
 };
 
+// TODO(piraka9011) Why is this not being used and metadata is being loaded in storage_plugin
+//  instead?
 template<>
 struct convert<rosbag2_storage::BagMetadata>
 {

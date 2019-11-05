@@ -36,10 +36,29 @@ std::string remove_extension(const std::string & filename) {
   return filename.substr(0, last_dot);
 }
 
-void remove_extension(std::string & filename) {
-  size_t last_dot = filename.find_last_of('.');
-  if (last_dot == std::string::npos) return;
-  filename.erase(last_dot, filename.size()-1);
+//void remove_extension(std::string & filename) {
+//  size_t last_dot = filename.find_last_of('.');
+//  if (last_dot == std::string::npos) return;
+//  filename.erase(last_dot, filename.size()-1);
+//}
+
+void clean_path(
+  const std::string & uri,
+  std::string & dir_name, // Directory name ex. rosbag2_2019_10_2
+  std::string & new_uri,  // URI for files ex. rosbag2_2019_10_2/rosbag2_2019_10_2 (_1,_2,_3 etc.)
+  std::string & relative_path  // Full DB path ex. rosbag2_2019_10_2/rosbag2_2019_10_2.db.compressed
+  )
+{
+  if (uri.back() == '/') {
+    dir_name = uri.substr(0, uri.size() - 1);
+    new_uri = uri + dir_name;
+    relative_path = new_uri + ".db3" + ".compressed_poc";
+  }
+  else {
+    dir_name = uri;
+    new_uri = dir_name + "/" + dir_name;
+    relative_path = new_uri +  ".db3" + ".compressed_poc";
+  }
 }
 }
 
@@ -97,26 +116,28 @@ SequentialReader::open(
   const StorageOptions & storage_options, const ConverterOptions & converter_options)
 {
   /// Hardcoded for POC.
-  std::string file_name;
-  std::string relative_path;
-  if (storage_options.uri.back() == '/') {
-    file_name = storage_options.uri.substr(0, storage_options.uri.size() - 1);
-    relative_path = storage_options.uri + file_name + ".db3" + ".compressed_poc";
-  }
-  else {
-    file_name = storage_options.uri;
-    relative_path = storage_options.uri + "/" + file_name +  ".db3" + ".compressed_poc";
-  }
-  std::string decompressed_uri = decompress_uri(relative_path);
-  remove_extension(decompressed_uri);
-  ROSBAG2_LOG_INFO_STREAM("file_name: " << file_name);
-  ROSBAG2_LOG_INFO_STREAM("relative_path: " << relative_path);
-  ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
-  storage_ = storage_factory_->open_read_only(decompressed_uri, storage_options.storage_id);
+  std::string dir_name, new_uri, comp_file_relative_path;
+  // Need to clean b/c someone might specify URI with trailing backslash.
+  clean_path(storage_options.uri, dir_name, new_uri, comp_file_relative_path);
+  ROSBAG2_LOG_INFO_STREAM("dir_name: " << dir_name);
+  ROSBAG2_LOG_INFO_STREAM("new_uri: " << new_uri);
+  ROSBAG2_LOG_INFO_STREAM("relative_path: " << comp_file_relative_path);
+  storage_ = storage_factory_->open_read_only(new_uri, storage_options.storage_id);
   /// End POC
+
   if (!storage_) {
     throw std::runtime_error("No storage could be initialized. Abort");
   }
+
+  /// POC
+  ROSBAG2_LOG_INFO_STREAM(
+    "compression_identifier: " << storage_->get_metadata().compression_identifier);
+  if (!storage_->get_metadata().compression_identifier.empty()) {
+    std::string decompressed_uri = decompress_uri(comp_file_relative_path);
+    ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
+  }
+  /// End POC
+
   auto topics = storage_->get_metadata().topics_with_message_count;
   if (topics.empty()) {
     return;
@@ -148,19 +169,16 @@ bool SequentialReader::has_next()
   if (storage_) {
     return storage_->has_next();
   }
-  throw std::runtime_error("Bag is not open. Call open() before reading.");
+  throw std::runtime_error("Bag is not open. Call open() before checking next message.");
 }
 
 std::shared_ptr<SerializedBagMessage> SequentialReader::read_next()
 {
   if (storage_) {
     auto message = storage_->read_next();
-    if (std::istringstream(storage_->get_metadata().compression_identifier)) {
-      std::shared_ptr<SerializedBagMessage> returned_message = converter_ ? converter_->convert
-        (message) : message;
-    }
+    return converter_ ? converter_->convert(message) : message;
   }
-  throw std::runtime_error("Bag is not open. Call open() before reading.");
+  throw std::runtime_error("Bag is not open. Call open() before reading next message.");
 }
 
 std::vector<TopicMetadata> SequentialReader::get_all_topics_and_types()
@@ -168,7 +186,7 @@ std::vector<TopicMetadata> SequentialReader::get_all_topics_and_types()
   if (storage_) {
     return storage_->get_all_topics_and_types();
   }
-  throw std::runtime_error("Bag is not open. Call open() before reading.");
+  throw std::runtime_error("Bag is not open. Call open() before getting all topics.");
 }
 
 }  // namespace rosbag2
