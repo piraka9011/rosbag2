@@ -62,6 +62,46 @@ void clean_path(
 }
 }
 
+std::shared_ptr<rosbag2::SerializedBagMessage> decompress_message(
+  std::shared_ptr<rosbag2::SerializedBagMessage> & to_decompress)
+{
+  size_t length = to_decompress->serialized_data->buffer_length;
+  size_t decompress_bound = ZSTD_compressBound(length);
+
+  // Allocate a new buffer for the compressed data
+  auto decompressed_buffer = new rcutils_uint8_array_t;
+  *decompressed_buffer = rcutils_get_zero_initialized_uint8_array();
+  auto allocator = rcutils_get_default_allocator();
+  auto ret = rcutils_uint8_array_init(decompressed_buffer, decompress_bound, &allocator);
+
+  // TODO(piraka9011) Figure out why we can't use ROSBAG2_LOG macro.
+  if (ret != 0) {
+    std::cout << "Unable to initialize an rcutils_uint8_array when decompressing message.";
+  }
+
+  ZSTD_decompress(decompressed_buffer->buffer, decompress_bound,
+    to_decompress->serialized_data->buffer, length);
+
+  // Free the uncompressed data
+  to_decompress->serialized_data.reset();
+
+  // Create the shared pointer with a deleter
+  auto compressed_data = std::shared_ptr<rcutils_uint8_array_t>(
+    decompressed_buffer,
+    [](rcutils_uint8_array_t * compressed_buffer) {
+      int error = rcutils_uint8_array_fini(compressed_buffer);
+      delete compressed_buffer;
+      if (error != RCUTILS_RET_OK) {
+        RCUTILS_LOG_ERROR_NAMED("compress_bag_message_data", "Leaking memory %i", error);
+      }
+    });
+
+  // Fill message with decompressed data
+  to_decompress->serialized_data = compressed_data;
+
+  return to_decompress;
+}
+
 std::string decompress_uri(const std::string & uri) {
   ROSBAG2_LOG_INFO_STREAM("Decompressing " << uri);
   std::ifstream infile(uri);

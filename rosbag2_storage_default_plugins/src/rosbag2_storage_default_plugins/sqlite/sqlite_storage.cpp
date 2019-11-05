@@ -269,6 +269,8 @@ rosbag2_storage::BagMetadata SqliteStorage::get_metadata()
   for (const auto & relative_path : metadata.relative_file_paths) {
     metadata.bag_size += rosbag2_storage::FilesystemHelper::get_file_size(relative_path);
   }
+
+  /// POC
   // TODO(piraka9011) Load metadata once instead of hardcoding.
   metadata.compression_identifier = "TESTING_POC";
 
