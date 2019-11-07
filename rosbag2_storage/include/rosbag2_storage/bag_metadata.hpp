@@ -42,8 +42,8 @@ struct BagMetadata
   uint64_t message_count;
   std::vector<TopicInformation> topics_with_message_count;
   // TODO(piraka9011) Change format to CompressionOptions or CompressionMode?
-  // TODO(piraka9011) Rename to compression_format for consistency.
-  std::string compression_identifier;
+  std::string compression_format;
+  std::string compression_mode;
 };
 
 }  // namespace rosbag2_storage

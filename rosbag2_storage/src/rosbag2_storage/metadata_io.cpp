@@ -113,8 +113,6 @@ struct convert<std::chrono::time_point<std::chrono::high_resolution_clock>>
   }
 };
 
-// TODO(piraka9011) Why is this not being used and metadata is being loaded in storage_plugin
-//  instead?
 template<>
 struct convert<rosbag2_storage::BagMetadata>
 {
@@ -128,7 +126,8 @@ struct convert<rosbag2_storage::BagMetadata>
     node["starting_time"] = metadata.starting_time;
     node["message_count"] = metadata.message_count;
     node["topics_with_message_count"] = metadata.topics_with_message_count;
-    node["compression_identifier"] = metadata.compression_identifier;
+    node["compression_format"] = metadata.compression_format;
+    node["compression_mode"] = metadata.compression_mode;
     return node;
   }
 
@@ -143,7 +142,8 @@ struct convert<rosbag2_storage::BagMetadata>
     metadata.message_count = node["message_count"].as<uint64_t>();
     metadata.topics_with_message_count =
       node["topics_with_message_count"].as<std::vector<rosbag2_storage::TopicInformation>>();
-    metadata.compression_identifier = node["compression_identifier"].as<std::string>();
+    metadata.compression_format = node["compression_format"].as<std::string>();
+    metadata.compression_mode = node["compression_mode"].as<std::string>();
     return true;
   }
 };
@@ -169,7 +169,7 @@ BagMetadata MetadataIo::read_metadata(const std::string & uri)
     metadata.bag_size = FilesystemHelper::calculate_directory_size(uri);
     return metadata;
   } catch (const YAML::Exception & ex) {
-    throw std::runtime_error(std::string("Exception on parsing info file: ") + ex.what());
+    throw std::runtime_error(std::string("Exception on parsing metadata file: ") + ex.what());
   }
 }
 
