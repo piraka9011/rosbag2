@@ -29,6 +29,7 @@
 #include "rosbag2/storage_options.hpp"
 #include "rosbag2/types.hpp"
 #include "rosbag2/visibility_control.hpp"
+#include "decompressor_poc.hpp"
 
 // This is necessary because of using stl types here. It is completely safe, because
 // a) the member is not accessible from the outside
@@ -100,12 +101,22 @@ public:
    */
   virtual std::vector<TopicMetadata> get_all_topics_and_types();
 
+  virtual void load_next_file();
+
+  virtual bool has_next_file() const;
+
 private:
   std::unique_ptr<rosbag2_storage::StorageFactoryInterface> storage_factory_;
   std::shared_ptr<SerializationFormatConverterFactoryInterface> converter_factory_;
   std::shared_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> storage_;
   std::unique_ptr<Converter> converter_;
   std::unique_ptr<rosbag2_storage::BagMetadata> metadata_;
+  StorageOptions storage_options_{};
+  std::vector<std::string> file_paths_{};  // List of database files.
+  std::vector<std::string>::iterator current_file_iterator_{};  // Index of file to read from
+  std::unique_ptr<DecompressorPoC> decompressor_{};
+  bool file_is_compressed_;
+  bool message_is_compressed_;
 };
 
 }  // namespace rosbag2

@@ -15,6 +15,7 @@
 #include "rosbag2/sequential_reader.hpp"
 #include "rosbag2/decompressor_poc.hpp"
 
+#include <cassert>
 #include <fstream>
 #include <memory>
 #include <stdexcept>
@@ -23,119 +24,32 @@
 #include <vector>
 
 #include "snappy.h"
-
+#include "rcpputils/filesystem_helper.hpp"
 #include "rosbag2/compression_options.hpp"
 #include "rosbag2/info.hpp"
 #include "rosbag2/logging.hpp"
+#include "rosbag2_storage/metadata_io.hpp"
 
 namespace
 {
-std::string remove_extension(const std::string & filename) {
-  size_t last_dot = filename.find_last_of('.');
-  if (last_dot == std::string::npos) return filename;
-  return filename.substr(0, last_dot);
+void remove_extension(std::string & filename, int n_times = 1) {
+  for (int i = 0; i < n_times; i++) {
+    size_t last_dot = filename.find_last_of('.');
+    if (last_dot == std::string::npos) return;
+    filename.erase(last_dot, filename.size() - 1);
+  }
 }
 
-//void remove_extension(std::string & filename) {
-//  size_t last_dot = filename.find_last_of('.');
-//  if (last_dot == std::string::npos) return;
-//  filename.erase(last_dot, filename.size()-1);
-//}
-
-void clean_path(
-  const std::string & uri,
-  std::string & dir_name, // Directory name ex. rosbag2_2019_10_2
-  std::string & new_uri,  // URI for files ex. rosbag2_2019_10_2/rosbag2_2019_10_2 (_1,_2,_3 etc.)
-  std::string & relative_path  // Full DB path ex. rosbag2_2019_10_2/rosbag2_2019_10_2.db.compressed
-  )
+void clean_uri(const std::string &uri, std::string &new_uri)
 {
   if (uri.back() == '/') {
-    dir_name = uri.substr(0, uri.size() - 1);
-    new_uri = uri + dir_name;
-    relative_path = new_uri + ".db3" + ".compressed_poc";
-  }
-  else {
-    dir_name = uri;
-    new_uri = dir_name + "/" + dir_name;
-    relative_path = new_uri +  ".db3" + ".compressed_poc";
+    new_uri = uri + uri.substr(0, uri.size() - 1);;
+  } else {
+    new_uri = uri + "/" + uri;
   }
 }
+
 }
-
-std::shared_ptr<rosbag2::SerializedBagMessage> decompress_message(
-  std::shared_ptr<rosbag2::SerializedBagMessage> & to_decompress)
-{
-  size_t length = to_decompress->serialized_data->buffer_length;
-  size_t decompress_bound = ZSTD_compressBound(length);
-
-  // Allocate a new buffer for the compressed data
-  auto decompressed_buffer = new rcutils_uint8_array_t;
-  *decompressed_buffer = rcutils_get_zero_initialized_uint8_array();
-  auto allocator = rcutils_get_default_allocator();
-  auto ret = rcutils_uint8_array_init(decompressed_buffer, decompress_bound, &allocator);
-
-  // TODO(piraka9011) Figure out why we can't use ROSBAG2_LOG macro.
-  if (ret != 0) {
-    std::cout << "Unable to initialize an rcutils_uint8_array when decompressing message.";
-  }
-
-  ZSTD_decompress(decompressed_buffer->buffer, decompress_bound,
-    to_decompress->serialized_data->buffer, length);
-
-  // Free the uncompressed data
-  to_decompress->serialized_data.reset();
-
-  // Create the shared pointer with a deleter
-  auto compressed_data = std::shared_ptr<rcutils_uint8_array_t>(
-    decompressed_buffer,
-    [](rcutils_uint8_array_t * compressed_buffer) {
-      int error = rcutils_uint8_array_fini(compressed_buffer);
-      delete compressed_buffer;
-      if (error != RCUTILS_RET_OK) {
-        RCUTILS_LOG_ERROR_NAMED("compress_bag_message_data", "Leaking memory %i", error);
-      }
-    });
-
-  // Fill message with decompressed data
-  to_decompress->serialized_data = compressed_data;
-
-  return to_decompress;
-}
-
-std::string decompress_uri(const std::string & uri) {
-  ROSBAG2_LOG_INFO_STREAM("Decompressing " << uri);
-  std::ifstream infile(uri);
-  std::string compressed_contents;
-  std::string decompressed_output;
-  std::string new_file_uri;
-  if (infile)
-  {
-    // Get size and allocate
-    ROSBAG2_LOG_INFO_STREAM("Resizing compressed content holder.");
-    infile.seekg(0, std::ios::end);
-    compressed_contents.resize(infile.tellg());
-    // Go back and read in contents
-    ROSBAG2_LOG_INFO("Reading in contents to compressed_contents.");
-    infile.seekg(0, std::ios::beg);
-    infile.read(&compressed_contents[0], compressed_contents.size());
-    // Decompress
-    ROSBAG2_LOG_INFO("Decompressing...");
-    snappy::Uncompress(compressed_contents.c_str(), infile.gcount(), &decompressed_output);
-    // Remove .compress extension and write to file.
-    new_file_uri = remove_extension(uri);
-    ROSBAG2_LOG_INFO_STREAM("New File URI: " << new_file_uri);
-    std::ofstream outfile;
-    ROSBAG2_LOG_INFO("Writing to file.");
-    outfile.open(new_file_uri);
-    outfile << decompressed_output;
-    outfile.close();
-    infile.close();
-    return new_file_uri;
-  }
-  ROSBAG2_LOG_ERROR_STREAM("Unable to open compressed file.");
-  throw std::runtime_error("Unable to open file");
-}
-
 namespace rosbag2
 {
 
@@ -144,7 +58,9 @@ SequentialReader::SequentialReader(
   std::shared_ptr<SerializationFormatConverterFactoryInterface> converter_factory)
 : storage_factory_(std::move(storage_factory)), converter_factory_(std::move(converter_factory)),
   converter_(nullptr)
-{}
+{
+  decompressor_ = std::make_unique<DecompressorPoC>();
+}
 
 SequentialReader::~SequentialReader()
 {
@@ -155,30 +71,43 @@ void
 SequentialReader::open(
   const StorageOptions & storage_options, const ConverterOptions & converter_options)
 {
+  storage_options_ = storage_options;
   /// Hardcoded for POC.
-  std::string dir_name, new_uri, comp_file_relative_path;
+  std::string new_uri, comp_file_relative_path;
   // Need to clean b/c someone might specify URI with trailing backslash.
-  clean_path(storage_options.uri, dir_name, new_uri, comp_file_relative_path);
-  ROSBAG2_LOG_INFO_STREAM("dir_name: " << dir_name);
-  ROSBAG2_LOG_INFO_STREAM("new_uri: " << new_uri);
-  ROSBAG2_LOG_INFO_STREAM("relative_path: " << comp_file_relative_path);
-  storage_ = storage_factory_->open_read_only(new_uri, storage_options.storage_id);
+  clean_uri(storage_options_.uri, new_uri);
+  // New way of reading metadata
+  rosbag2_storage::MetadataIo metadata_io;
+  metadata_ = std::make_unique<rosbag2_storage::BagMetadata>(
+    metadata_io.read_metadata(storage_options_.uri));
+  // Check if we need to compress
+  ROSBAG2_LOG_INFO_STREAM("compression_identifier: " << metadata_->compression_format);
+  ROSBAG2_LOG_INFO_STREAM("compression_mode: " << metadata_->compression_mode);
+  if (!metadata_->compression_format.empty()) {
+    file_is_compressed_ = StringToCompressionModeMap.at(metadata_->compression_mode) ==
+                          CompressionMode::FILE;
+    message_is_compressed_ = StringToCompressionModeMap.at(metadata_->compression_mode) ==
+                             CompressionMode::MESSAGE;
+    if (file_is_compressed_) {
+      ROSBAG2_LOG_INFO("Found compressed files.");
+      decompressor_->uri_to_relative_path(new_uri, comp_file_relative_path);
+      ROSBAG2_LOG_INFO_STREAM("relative_path: " << comp_file_relative_path);
+      std::string decompressed_uri = decompressor_->decompress_file(comp_file_relative_path);
+      ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
+    }
+  }
+
+  storage_ = storage_factory_->open_read_only(new_uri, storage_options_.storage_id);
   /// End POC
 
   if (!storage_) {
     throw std::runtime_error("No storage could be initialized. Abort");
   }
 
-  /// POC
-  ROSBAG2_LOG_INFO_STREAM(
-    "compression_identifier: " << storage_->get_metadata().compression_identifier);
-  if (!storage_->get_metadata().compression_identifier.empty()) {
-    std::string decompressed_uri = decompress_uri(comp_file_relative_path);
-    ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
-  }
-  /// End POC
+  file_paths_ = metadata_->relative_file_paths;
+  current_file_iterator_ = file_paths_.begin();
 
-  auto topics = storage_->get_metadata().topics_with_message_count;
+  auto topics = metadata_->topics_with_message_count;
   if (topics.empty()) {
     return;
   }
@@ -204,9 +133,33 @@ SequentialReader::open(
   }
 }
 
+bool SequentialReader::has_next_file() const
+{
+  return current_file_iterator_ + 1 != file_paths_.end();
+}
+
+void SequentialReader::load_next_file()
+{
+  assert(current_file_iterator_ != file_paths_.end());
+  current_file_iterator_++;
+}
+
 bool SequentialReader::has_next()
 {
   if (storage_) {
+    if (!storage_->has_next()) {
+      if (has_next_file()) {
+        load_next_file();
+        if (file_is_compressed_) {
+          remove_extension(*current_file_iterator_, 2);
+          std::string relative_compressed_file_path;
+          decompressor_->uri_to_relative_path(*current_file_iterator_,
+            relative_compressed_file_path);
+          decompressor_->decompress_file(relative_compressed_file_path);
+        }
+        storage_ = storage_factory_->open_read_only(*current_file_iterator_, storage_options_.storage_id);
+      }
+    }
     return storage_->has_next();
   }
   throw std::runtime_error("Bag is not open. Call open() before checking next message.");

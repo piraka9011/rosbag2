@@ -33,7 +33,18 @@ namespace rosbag2
 class Decompressor
 {
 public:
-  virtual std::string decompress_uri(const std::string & uri) = 0;
+  /**
+   * Convert the URI of a compressed file to a decompressed one.
+   *
+   * @param dir_name Directory name ex. rosbag2_2019_10_2
+   * @param URI for files ex. rosbag2_2019_10_2/rosbag2_2019_10_2 (_1,_2,_3 etc.)
+   * @param relative_path Full DB path ex. rosbag2_2019_10_2/rosbag2_2019_10_2.db.compressed
+   */
+  virtual void uri_to_relative_path(
+    const std::string & uri,
+    std::string & new_uri) = 0;
+
+  virtual std::string decompress_file(const std::string & uri) = 0;
 
   virtual std::shared_ptr<SerializedBagMessage> decompress_bag_message_data(
     std::shared_ptr<SerializedBagMessage> & to_decompress) = 0;

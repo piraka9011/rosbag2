@@ -283,7 +283,8 @@ void Writer::finalize_metadata()
     metadata_.message_count += topic.second.message_count;
   }
   // todo mark if compression is inactive (sane, defined default - null / empty string?) vs provided via the CLI
-  metadata_.compression_identifier = compressor_->get_compression_identifier();
+  metadata_.compression_format = compressor_->get_compression_identifier();
+  metadata_.compression_mode = CompressionModeToStringMap.at(compression_options_.mode);
 }
 
 }  // namespace rosbag2

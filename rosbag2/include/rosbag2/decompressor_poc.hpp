@@ -23,10 +23,14 @@ namespace rosbag2
 
 class DecompressorPoC : Decompressor
 {
+public:
   DecompressorPoC() = default;
   virtual ~DecompressorPoC() = default;
 
-  std::string decompress_uri(const std::string & uri) override ;
+  void uri_to_relative_path(const std::string & uri,
+                            std::string & new_uri) override ;
+
+  std::string decompress_file(const std::string & uri) override ;
 
   std::shared_ptr<SerializedBagMessage> decompress_bag_message_data(
     std::shared_ptr<SerializedBagMessage> & to_decompress) override;
