@@ -50,8 +50,8 @@ class RecordVerb(VerbExtension):
                  'effect if --no-discovery is enabled.'
         )
         parser.add_argument(
-            '-c', '--compression-mode', default='',
-            help='compression mode: valid choices are FILE, MESSAGE'
+            '-c', '--compression-mode', type=str, default='', choices=['FILE', 'MESSAGE'],
+            help='compression mode: valid choices are FILE, MESSAGE.'
         )
         self._subparser = parser
 
