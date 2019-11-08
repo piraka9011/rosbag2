@@ -32,6 +32,7 @@
 
 namespace
 {
+// TODO(piraka9011) Use rcpputils
 void remove_extension(std::string & filename, int n_times = 1) {
   for (int i = 0; i < n_times; i++) {
     size_t last_dot = filename.find_last_of('.');
@@ -96,7 +97,7 @@ SequentialReader::open(
       ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
     }
   }
-
+  ROSBAG2_LOG_INFO_STREAM("New URI: " << new_uri);
   storage_ = storage_factory_->open_read_only(new_uri, storage_options_.storage_id);
   /// End POC
 
@@ -148,15 +149,21 @@ bool SequentialReader::has_next()
 {
   if (storage_) {
     if (!storage_->has_next()) {
+      // Multifile reader
       if (has_next_file()) {
         load_next_file();
+        /// POC
+        // We'll always need to remove the file extension
+        remove_extension(*current_file_iterator_);
         if (file_is_compressed_) {
-          remove_extension(*current_file_iterator_, 2);
+          // Remove it again b/c we have 2 extensions: file and compression
+          remove_extension(*current_file_iterator_);
           std::string relative_compressed_file_path;
           decompressor_->uri_to_relative_path(*current_file_iterator_,
             relative_compressed_file_path);
           decompressor_->decompress_file(relative_compressed_file_path);
         }
+        /// End POC
         storage_ = storage_factory_->open_read_only(*current_file_iterator_, storage_options_.storage_id);
       }
     }
@@ -168,8 +175,14 @@ bool SequentialReader::has_next()
 std::shared_ptr<SerializedBagMessage> SequentialReader::read_next()
 {
   if (storage_) {
+    /// POC
     auto message = storage_->read_next();
-    return converter_ ? converter_->convert(message) : message;
+    auto converted_message = converter_ ? converter_->convert(message) : message;
+    if (message_is_compressed_) {
+      converted_message = decompressor_->decompress_bag_message_data(converted_message);
+    }
+    return converted_message;
+    /// End POC
   }
   throw std::runtime_error("Bag is not open. Call open() before reading next message.");
 }

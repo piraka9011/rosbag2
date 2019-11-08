@@ -85,40 +85,19 @@ std::shared_ptr<SerializedBagMessage> CompressorPoC::compress_bag_message_data(
 
   size_t length = to_compress->serialized_data->buffer_length;
   size_t compress_bound = ZSTD_compressBound(length);
+  uint8_t * compressed_data = new uint8_t[compress_bound];
 
-  // allocate a new buffer for the compressed data
-  auto compressed_buffer = new rcutils_uint8_array_t;
-  *compressed_buffer = rcutils_get_zero_initialized_uint8_array();
-  auto allocator = rcutils_get_default_allocator();
-  auto ret = rcutils_uint8_array_init(compressed_buffer, compress_bound, &allocator);
-
-  if (ret != 0) {
-    std::cout << "compress_bag_message_data: rcutils_uint8_array_init error:" << ret << std::endl;
-  }
-
-  size_t compressed_size = ZSTD_compress(compressed_buffer->buffer,
-      compress_bound, to_compress->serialized_data->buffer, length, 1);
+  size_t compressed_size = ZSTD_compress(compressed_data, compress_bound,
+    to_compress->serialized_data->buffer, length, 1);
 
   std::cout << "compress_bag_message_data: original length=" << length <<
     ", compressed length=" << compressed_size << ", ratio=" <<
   (float)length / (float)compressed_size << std::endl;
 
-  // free the uncompressed data
-  to_compress->serialized_data.reset();
+  // TODO(piraka9011) Leaking memory :))))
+  to_compress->serialized_data->buffer = compressed_data;
+  to_compress->serialized_data->buffer_length = compress_bound;
 
-  // create the shared pointer with a deleter
-  auto compressed_data = std::shared_ptr<rcutils_uint8_array_t>(compressed_buffer,
-      [](rcutils_uint8_array_t * compressed_buffer) {
-        int error = rcutils_uint8_array_fini(compressed_buffer);
-        delete compressed_buffer;
-        if (error != RCUTILS_RET_OK) {
-          RCUTILS_LOG_ERROR_NAMED(
-            "compress_bag_message_data", "Leaking memory %i", error);
-        }
-      });
-
-  // update the bag with the compressed data
-  to_compress->serialized_data = compressed_data;
   return to_compress;
 }
 

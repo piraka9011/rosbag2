@@ -39,7 +39,7 @@ void DecompressorPoC::uri_to_relative_path(
 
 std::string DecompressorPoC::decompress_file(const std::string & uri)
 {
-  ROSBAG2_LOG_INFO_STREAM("Decompressing " << uri);
+  ROSBAG2_LOG_DEBUG_STREAM("Decompressing file: " << uri);
   std::ifstream infile(uri);
   std::string compressed_contents;
   std::string decompressed_output;
@@ -69,41 +69,30 @@ std::string DecompressorPoC::decompress_file(const std::string & uri)
 std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_data(
   std::shared_ptr<SerializedBagMessage> & to_decompress)
 {
+  ROSBAG2_LOG_DEBUG("Decompressing message");
   size_t length = to_decompress->serialized_data->buffer_length;
-  size_t decompress_bound = ZSTD_compressBound(length);
+  uint8_t * buffer = to_decompress->serialized_data->buffer;
 
-  // Allocate a new buffer for the compressed data
-  auto decompressed_buffer = new rcutils_uint8_array_t;
-  *decompressed_buffer = rcutils_get_zero_initialized_uint8_array();
-  auto allocator = rcutils_get_default_allocator();
-  auto ret = rcutils_uint8_array_init(decompressed_buffer, decompress_bound, &allocator);
-
-  // TODO(piraka9011) Figure out why we can't use ROSBAG2_LOG macro.
-  if (ret != 0) {
-    std::cout << "Unable to initialize an rcutils_uint8_array when decompressing message.";
+  unsigned long long const content_size = ZSTD_getFrameContentSize(buffer, length);
+  if (content_size == ZSTD_CONTENTSIZE_ERROR) {
+    ROSBAG2_LOG_WARN("Message not compressed with ZSTD.");
+  }
+  if (content_size == ZSTD_CONTENTSIZE_UNKNOWN) {
+    ROSBAG2_LOG_WARN("Original message size unknown.");
   }
 
-  ZSTD_decompress(decompressed_buffer->buffer, decompress_bound,
-                  to_decompress->serialized_data->buffer, length);
+  // TODO(piraka9011) Safer cast b/c zstd only returns unsigned long long...
+  // (val < 0) ? __SIZE_MAX__ : (size_t)((unsigned)val);
+  auto decompress_bound = (size_t)((unsigned)content_size);
+  uint8_t * decompressed_buffer = new uint8_t[decompress_bound];
 
-  // Free the uncompressed data
-  to_decompress->serialized_data.reset();
-
-  // Create the shared pointer with a deleter
-  auto compressed_data = std::shared_ptr<rcutils_uint8_array_t>(
-    decompressed_buffer,
-    [](rcutils_uint8_array_t *compressed_buffer)
-    {
-      int error = rcutils_uint8_array_fini(compressed_buffer);
-      delete compressed_buffer;
-      if (error != RCUTILS_RET_OK) {
-        RCUTILS_LOG_ERROR_NAMED("compress_bag_message_data", "Leaking memory %i", error);
-      }
-    });
+  ZSTD_decompress(decompressed_buffer, decompress_bound,
+                  buffer, length);
 
   // Fill message with decompressed data
-  to_decompress->serialized_data = compressed_data;
-
+  // TODO(piraka9011) Leaking memory :)))) std::copy, memcpy, etc.
+  to_decompress->serialized_data->buffer = decompressed_buffer;
+  to_decompress->serialized_data->buffer_length = decompress_bound;
   return to_decompress;
 }
 

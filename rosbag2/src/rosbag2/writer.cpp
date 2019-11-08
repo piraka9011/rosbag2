@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "rosbag2/compressor_poc.hpp"
 #include "rosbag2/writer.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 #include "rosbag2/info.hpp"
+#include "rosbag2/logging.hpp"
 #include "rosbag2/storage_options.hpp"
 #include "rosbag2_storage/filesystem_helper.hpp"
-#include "rosbag2/compressor_poc.hpp"
-#include <cstdio>
+
 
 namespace rosbag2
 {
@@ -67,7 +69,7 @@ Writer::Writer(
 
 Writer::~Writer()
 {
-  //todo is the dtor really a good place to finalize all this?
+  // TODO(dabonnie) Is the dtor really a good place to finalize all this?
   auto const current_uri = storage_->get_relative_path();
   if (compression_options_.mode == CompressionMode::FILE) {
     compress_file(current_uri);
@@ -90,7 +92,9 @@ void Writer::init_metadata()
   metadata_.storage_identifier = storage_->get_storage_identifier();
   metadata_.starting_time = std::chrono::time_point<std::chrono::high_resolution_clock>(
     std::chrono::nanoseconds::max());
-  metadata_.relative_file_paths = {storage_->get_relative_path()}; //todo fixme when compressing this isn't valid
+  // TODO(dabonnie) fixme when compressing this isn't valid
+  // This is already taken care of in dtor tho?
+  // metadata_.relative_file_paths = {storage_->get_relative_path()};
 }
 
 void Writer::open(
@@ -175,7 +179,7 @@ void Writer::remove_topic(const TopicMetadata & topic_with_type)
 
 void Writer::split_bagfile()
 {
-
+  ROSBAG2_LOG_INFO("Splitting bag file");
   const auto current_uri = storage_->get_relative_path();
   const auto storage_uri_rollover = format_storage_uri(
     base_folder_,
@@ -203,18 +207,18 @@ void Writer::split_bagfile()
 void Writer::compress_file(std::string uri_to_compress)
 {
 
-  // todo start this in a new thread? most likely don't block....
+  // TODO(dabonnie) start this in a new thread? most likely don't block....
   std::cout << "COMPRESSING FILE" << std::endl;
   auto start = std::chrono::high_resolution_clock::now();
   auto compressed_uri = compressor_->compress_uri(uri_to_compress);
   auto end = std::chrono::high_resolution_clock::now();
 
-  // todo wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
+  // TODO(dabonnie) wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
   // https://github.com/HowardHinnant/date
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
   std::cout << "Compression took " << duration.count() << " milliseconds" << std::endl;
 
-  // todo what happens if compression fails for a single file?
+  // TODO(dabonnie) what happens if compression fails for a single file?
   metadata_.relative_file_paths.push_back(compressed_uri);
 
   // delete file
@@ -242,19 +246,18 @@ void Writer::write(std::shared_ptr<SerializedBagMessage> message)
   const auto duration = message_timestamp - metadata_.starting_time;
   metadata_.duration = std::max(metadata_.duration, duration);
 
-  // TODO compress a single message
+  // TODO(dabonnie) compress a single message
   // if we need to compress a single message, then compress here
   // message has a shared pointer to serailzied data, compress that then pass)
+  auto converted_message = converter_ ? converter_->convert(message) : message;
   if (compression_options_.mode == CompressionMode::MESSAGE) {
-
-    auto converted_message = converter_ ? converter_->convert(message) : message;
-    storage_->write(compressor_->compress_bag_message_data(converted_message));
-
+    auto compressed_message = compressor_->compress_bag_message_data(converted_message);
+    storage_->write(compressed_message);
   } else {
-    storage_->write(converter_ ? converter_->convert(message) : message);
+    storage_->write(converted_message);
   }
 }
-// TODO fixme
+// TODO(dabonnie) fixme
 bool Writer::should_split_bagfile() const
 {
 //  if (max_bagfile_size_ == rosbag2_storage::storage_interfaces::MAX_BAGFILE_SIZE_NO_SPLIT) {
@@ -263,7 +266,8 @@ bool Writer::should_split_bagfile() const
 //    return storage_->get_bagfile_size() > max_bagfile_size_;
 //  }
 
-  return storage_->get_bagfile_size() > 1024 * 100; // todo hardcoded for PoC, command line split size (-b) was not in this branch
+  // TODO(dabonnie) hardcoded for PoC, command line split size (-b) was not in this branch
+  return storage_->get_bagfile_size() > 1024 * 100;
 }
 
 void Writer::finalize_metadata()
@@ -282,7 +286,8 @@ void Writer::finalize_metadata()
     metadata_.topics_with_message_count.push_back(topic.second);
     metadata_.message_count += topic.second.message_count;
   }
-  // todo mark if compression is inactive (sane, defined default - null / empty string?) vs provided via the CLI
+  // TODO(dabonnie) mark if compression is inactive (sane, defined default - null / empty string?)
+  //  vs provided via the CLI
   metadata_.compression_format = compressor_->get_compression_identifier();
   metadata_.compression_mode = CompressionModeToStringMap.at(compression_options_.mode);
 }
