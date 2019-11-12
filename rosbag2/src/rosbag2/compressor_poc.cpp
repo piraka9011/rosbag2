@@ -24,7 +24,7 @@
 #include <cstdint>
 
 #include "rosbag2/types.hpp"
-#include "rcutils/logging_macros.h"
+#include "rosbag2/logging.hpp"
 
 namespace rosbag2
 {
@@ -32,40 +32,47 @@ namespace rosbag2
 /**
  * Compress a file on disk.
  *
- * @param uri input file to compress
- * @return
+ * @param uri Relative path to the input file to compress
+ * @return The compressed file relative path.
  */
-std::string CompressorPoC::compress_uri(const std::string & uri, int buffer_length)
+std::string CompressorPoC::compress_uri(const std::string & uri)
 {
-
-  std::cout << "Compressor:::" << uri << std::endl;
-
-  std::ifstream in(uri);
+  std::string decompressed_buffer;
+  std::string compressed_buffer;
   std::string compressed_uri = uri_to_compressed_uri(uri);
-  std::ofstream out(compressed_uri);
-
-  char * buffer = new char[buffer_length];  // todo could probably only allocate once if the buffer length is a constructor arg
-
-  while (!in.eof()) {
-    std::string compressed_output;
-    in.read(buffer, buffer_length);
-
-    // todo call abstract implementation method that wraps the specific API
-    //todo ZSTD Streaming: https://github.com/facebook/zstd/blob/dev/examples/streaming_compression.c
-    snappy::Compress(buffer, in.gcount(), &compressed_output);
-
-    // todo end abstraction
-    // if the compression above fails, should throw
-
-    out << compressed_output;
+  std::ifstream infile(uri);
+  ROSBAG2_LOG_INFO_STREAM("Compressing " << uri << " to " << compressed_uri);
+  if (infile.is_open()) {
+    // Get size and allocate
+    infile.seekg(0, std::ios::end);
+    size_t decompressed_buffer_length = infile.tellg();
+    decompressed_buffer.resize(decompressed_buffer_length);
+    // Go back and read in contents
+    infile.seekg(0, std::ios::beg);
+    infile.read(&decompressed_buffer[0], decompressed_buffer.size());
+    // TODO(dabonnie) call abstract implementation method that wraps the specific API
+    // TODO(dabonnie) ZSTD Streaming:
+    //  https://github.com/facebook/zstd/blob/dev/examples/streaming_compression.c
+    size_t result = snappy::Compress(decompressed_buffer.c_str(), decompressed_buffer_length,
+                                     &compressed_buffer);
+    ROSBAG2_LOG_INFO_STREAM("Size Before: " << decompressed_buffer_length << " B" <<
+                                            "\n\t\t   Size After: " << result << " B");
+    // If the compression above fails, should throw
+    /// End abstraction
+    infile.close();
+    std::ofstream outfile(compressed_uri);
+    if (!outfile.is_open()) {
+      std::stringstream err;
+      err << "Unable to open " << compressed_uri;
+      throw std::runtime_error(err.str());
+    }
+    outfile << compressed_buffer;
+    outfile.close();
+    return compressed_uri;
   }
-
-  in.close();
-  out.close();
-
-  std::cout << "Compressor::compressed_uri:" << compressed_uri << std::endl;
-  delete buffer;
-  return compressed_uri;
+  std::stringstream err;
+  err << "Unable to open " << uri;
+  throw std::runtime_error(err.str());
 }
 
 /**

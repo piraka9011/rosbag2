@@ -89,12 +89,14 @@ SequentialReader::open(
                           CompressionMode::FILE;
     message_is_compressed_ = StringToCompressionModeMap.at(metadata_->compression_mode) ==
                              CompressionMode::MESSAGE;
+    if (message_is_compressed_) {
+      ROSBAG2_LOG_INFO("Found compress messages.");
+    }
     if (file_is_compressed_) {
       ROSBAG2_LOG_INFO("Found compressed files.");
       decompressor_->uri_to_relative_path(new_uri, comp_file_relative_path);
       ROSBAG2_LOG_INFO_STREAM("relative_path: " << comp_file_relative_path);
       std::string decompressed_uri = decompressor_->decompress_file(comp_file_relative_path);
-      ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
     }
   }
   ROSBAG2_LOG_INFO_STREAM("New URI: " << new_uri);
@@ -151,11 +153,13 @@ bool SequentialReader::has_next()
     if (!storage_->has_next()) {
       // Multifile reader
       if (has_next_file()) {
+        ROSBAG2_LOG_INFO("Reading from next file.");
         load_next_file();
         /// POC
         // We'll always need to remove the file extension
         remove_extension(*current_file_iterator_);
         if (file_is_compressed_) {
+          ROSBAG2_LOG_INFO("Decompressing file.");
           // Remove it again b/c we have 2 extensions: file and compression
           remove_extension(*current_file_iterator_);
           std::string relative_compressed_file_path;

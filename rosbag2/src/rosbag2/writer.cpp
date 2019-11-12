@@ -70,20 +70,24 @@ Writer::Writer(
 Writer::~Writer()
 {
   // TODO(dabonnie) Is the dtor really a good place to finalize all this?
+  // The storage plugin needs to be closed to ensure everything is finalized correctly before
+  // compression.
+  // Order is also necessary to ensure that the storage is destroyed before the factory.
   auto const current_uri = storage_->get_relative_path();
+  storage_.reset();
+  storage_factory_.reset();
+
   if (compression_options_.mode == CompressionMode::FILE) {
     compress_file(current_uri);
   } else {
     metadata_.relative_file_paths.push_back(current_uri);
   }
 
+  // TODO(piraka9011) What is the check for?
   if (!base_folder_.empty()) {
     finalize_metadata();
     metadata_io_->write_metadata(base_folder_, metadata_);
   }
-
-  storage_.reset();  // Necessary to ensure that the storage is destroyed before the factory
-  storage_factory_.reset();
 }
 
 void Writer::init_metadata()
@@ -92,9 +96,6 @@ void Writer::init_metadata()
   metadata_.storage_identifier = storage_->get_storage_identifier();
   metadata_.starting_time = std::chrono::time_point<std::chrono::high_resolution_clock>(
     std::chrono::nanoseconds::max());
-  // TODO(dabonnie) fixme when compressing this isn't valid
-  // This is already taken care of in dtor tho?
-  // metadata_.relative_file_paths = {storage_->get_relative_path()};
 }
 
 void Writer::open(
@@ -103,7 +104,8 @@ void Writer::open(
   const CompressionOptions & compression_options)
 {
   compression_options_ = compression_options;
-  std::cout << "Compression Mode is: " << compression_options.mode << std::endl;
+  std::cout << "Compression Mode is: " <<
+  CompressionModeToStringMap.at(compression_options_.mode) << std::endl;
   open(storage_options, converter_options);
 }
 
@@ -215,15 +217,15 @@ void Writer::compress_file(std::string uri_to_compress)
 
   // TODO(dabonnie) wish there was an https://en.wikipedia.org/wiki/ISO_8601#Durations format
   // https://github.com/HowardHinnant/date
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  std::cout << "Compression took " << duration.count() << " milliseconds" << std::endl;
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  std::cout << "Compression took " << duration.count() << " microseconds" << std::endl;
 
   // TODO(dabonnie) what happens if compression fails for a single file?
   metadata_.relative_file_paths.push_back(compressed_uri);
 
   // delete file
-  std::cout << "Deleting original bagfile " << uri_to_compress << std::endl;
-  std::remove(uri_to_compress.c_str());
+//  std::cout << "Deleting original bagfile " << uri_to_compress << std::endl;
+//  std::remove(uri_to_compress.c_str());
 }
 
 void Writer::write(std::shared_ptr<SerializedBagMessage> message)

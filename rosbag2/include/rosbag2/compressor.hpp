@@ -47,9 +47,7 @@ public:
    * @param uri input file to compress
    * @return
    */
-  virtual std::string compress_uri(
-    const std::string & uri,
-    int buffer_length = COMPRESSOR_BUFFER_LENGTH_DEFAULT) = 0;
+  virtual std::string compress_uri(const std::string & uri) = 0;
 
   /**
    * Return the uri to use for the compressed file.

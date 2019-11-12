@@ -39,31 +39,45 @@ void DecompressorPoC::uri_to_relative_path(
 
 std::string DecompressorPoC::decompress_file(const std::string & uri)
 {
-  ROSBAG2_LOG_DEBUG_STREAM("Decompressing file: " << uri);
+  ROSBAG2_LOG_INFO_STREAM("Decompressing file: " << uri);
   std::ifstream infile(uri);
-  std::string compressed_contents;
-  std::string decompressed_output;
-  std::string new_file_uri = uri;
-  if (infile) {
+  std::string compressed_buffer;
+  std::string decompressed_buffer;
+  if (infile.is_open()) {
     // Get size and allocate
     infile.seekg(0, std::ios::end);
-    compressed_contents.resize(infile.tellg());
+    size_t compressed_buffer_length = infile.tellg();
+    compressed_buffer.resize(compressed_buffer_length);
     // Go back and read in contents
     infile.seekg(0, std::ios::beg);
-    infile.read(&compressed_contents[0], compressed_contents.size());
+    infile.read(&compressed_buffer[0], compressed_buffer.size());
     // Decompress
-    snappy::Uncompress(compressed_contents.c_str(), infile.gcount(), &decompressed_output);
-    // Remove .compress extension and write to file.
-    remove_extension(new_file_uri);
-    std::ofstream outfile;
-    outfile.open(new_file_uri);
-    outfile << decompressed_output;
-    outfile.close();
+    bool result = snappy::Uncompress(compressed_buffer.c_str(), compressed_buffer_length,
+      &decompressed_buffer);
+    ROSBAG2_LOG_INFO_STREAM("Result: " << std::boolalpha << result);
     infile.close();
-    return new_file_uri;
+    if (!result){
+      std::stringstream err;
+      err << "Unable to decompress: " << uri;
+      throw std::runtime_error(err.str());
+    }
+    // Remove .compress extension and write to file.
+    std::string decompressed_uri = uri;
+    remove_extension(decompressed_uri);
+    ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
+    std::ofstream outfile(decompressed_uri);
+    if (!outfile.is_open()) {
+      std::stringstream err;
+      err << "Unable to open " << decompressed_uri;
+      throw std::runtime_error(err.str());
+    }
+    outfile << decompressed_buffer;
+    outfile.close();
+    return decompressed_uri;
   }
-  ROSBAG2_LOG_ERROR_STREAM("Unable to open compressed file.");
-  throw std::runtime_error("Unable to open file");
+  std::stringstream err;
+  err << "Unable to open " << uri;
+  throw std::runtime_error(err.str());
 }
 
 std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_data(
