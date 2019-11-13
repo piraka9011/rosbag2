@@ -106,6 +106,29 @@ public:
   virtual bool has_next_file() const;
 
 private:
+  /**
+   * Checks if all topics in the bagfile have the same RMW serialization format.
+   * Currently a bag file can only be played if all topics have the same serialization format.
+   *
+   * \param topics Vector of TopicInformation with metadata.
+   * \throws runtime_error if any topic has a different serialization format from the rest.
+   */
+  virtual void check_topics_serialization_formats(const std::vector<TopicInformation> & topics);
+
+  /**
+   * Checks if the serialization format of the converter factory is the same as that of the storage
+   * factory.
+   * If not, changes the serialization format of the converter factory to use the serialization
+   * format of the storage factory.
+   *
+   * \param converter_serialization_format
+   * \param storage_serialization_format
+   */
+  virtual void check_converter_serialization_format(
+    const std::string & converter_serialization_format,
+    const std::string & storage_serialization_format);
+
+  virtual void decompress_uri(const std::string & uri);
   std::unique_ptr<rosbag2_storage::StorageFactoryInterface> storage_factory_;
   std::shared_ptr<SerializationFormatConverterFactoryInterface> converter_factory_;
   std::shared_ptr<rosbag2_storage::storage_interfaces::ReadOnlyInterface> storage_;

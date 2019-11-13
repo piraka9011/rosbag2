@@ -28,9 +28,11 @@ public:
   virtual ~DecompressorPoC() = default;
 
   void uri_to_relative_path(const std::string & uri,
-                            std::string & new_uri) override ;
+                            std::string & new_uri) override;
 
-  std::string decompress_file(const std::string & uri) override ;
+  std::string uri_to_relative_path(const std::string & uri);
+
+  std::string decompress_file(const std::string & uri) override;
 
   std::shared_ptr<SerializedBagMessage> decompress_bag_message_data(
     std::shared_ptr<SerializedBagMessage> & to_decompress) override;

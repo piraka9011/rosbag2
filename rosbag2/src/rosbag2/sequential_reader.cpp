@@ -16,14 +16,12 @@
 #include "rosbag2/decompressor_poc.hpp"
 
 #include <cassert>
-#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "snappy.h"
 #include "rcpputils/filesystem_helper.hpp"
 #include "rosbag2/compression_options.hpp"
 #include "rosbag2/info.hpp"
@@ -69,6 +67,34 @@ SequentialReader::~SequentialReader()
 }
 
 void
+SequentialReader::check_topics_serialization_formats(const std::vector<TopicInformation> &topics)
+{
+  auto storage_serialization_format = topics[0].topic_metadata.serialization_format;
+  for (const auto & topic : topics) {
+    if (topic.topic_metadata.serialization_format != storage_serialization_format) {
+      throw std::runtime_error("Topics with different rwm serialization format have been found. "
+                               "All topics must have the same serialization format.");
+    }
+  }
+}
+
+void SequentialReader::check_converter_serialization_format(
+  const std::string &converter_serialization_format,
+  const std::string &storage_serialization_format)
+{
+  if (converter_serialization_format != storage_serialization_format) {
+    converter_ = std::make_unique<Converter>(
+      storage_serialization_format,
+      converter_serialization_format,
+      converter_factory_);
+    auto topics = storage_->get_all_topics_and_types();
+    for (const auto & topic_with_type : topics) {
+      converter_->add_topic(topic_with_type.name, topic_with_type.type);
+    }
+  }
+}
+
+void
 SequentialReader::open(
   const StorageOptions & storage_options, const ConverterOptions & converter_options)
 {
@@ -82,24 +108,19 @@ SequentialReader::open(
   metadata_ = std::make_unique<rosbag2_storage::BagMetadata>(
     metadata_io.read_metadata(storage_options_.uri));
   // Check if we need to compress
-  ROSBAG2_LOG_INFO_STREAM("compression_identifier: " << metadata_->compression_format);
-  ROSBAG2_LOG_INFO_STREAM("compression_mode: " << metadata_->compression_mode);
   if (!metadata_->compression_format.empty()) {
     file_is_compressed_ = StringToCompressionModeMap.at(metadata_->compression_mode) ==
                           CompressionMode::FILE;
     message_is_compressed_ = StringToCompressionModeMap.at(metadata_->compression_mode) ==
                              CompressionMode::MESSAGE;
     if (message_is_compressed_) {
-      ROSBAG2_LOG_INFO("Found compress messages.");
+      ROSBAG2_LOG_INFO("Found compressed messages.");
     }
     if (file_is_compressed_) {
       ROSBAG2_LOG_INFO("Found compressed files.");
-      decompressor_->uri_to_relative_path(new_uri, comp_file_relative_path);
-      ROSBAG2_LOG_INFO_STREAM("relative_path: " << comp_file_relative_path);
-      std::string decompressed_uri = decompressor_->decompress_file(comp_file_relative_path);
+      decompress_uri(new_uri);
     }
   }
-  ROSBAG2_LOG_INFO_STREAM("New URI: " << new_uri);
   storage_ = storage_factory_->open_read_only(new_uri, storage_options_.storage_id);
   /// End POC
 
@@ -115,25 +136,16 @@ SequentialReader::open(
     return;
   }
 
-  // Currently a bag file can only be played if all topics have the same serialization format.
-  auto storage_serialization_format = topics[0].topic_metadata.serialization_format;
-  for (const auto & topic : topics) {
-    if (topic.topic_metadata.serialization_format != storage_serialization_format) {
-      throw std::runtime_error("Topics with different rwm serialization format have been found. "
-              "All topics must have the same serialization format.");
-    }
-  }
+  check_topics_serialization_formats(topics);
+  check_converter_serialization_format(
+    converter_options.output_serialization_format,
+    topics[0].topic_metadata.serialization_format);
+}
 
-  if (converter_options.output_serialization_format != storage_serialization_format) {
-    converter_ = std::make_unique<Converter>(
-      storage_serialization_format,
-      converter_options.output_serialization_format,
-      converter_factory_);
-    auto topics = storage_->get_all_topics_and_types();
-    for (const auto & topic_with_type : topics) {
-      converter_->add_topic(topic_with_type.name, topic_with_type.type);
-    }
-  }
+void SequentialReader::decompress_uri(const std::string & uri)
+{
+  std::string compressed_file_relative_path = decompressor_->uri_to_relative_path(uri);
+  std::string decompressed_uri = decompressor_->decompress_file(compressed_file_relative_path);
 }
 
 bool SequentialReader::has_next_file() const
@@ -159,13 +171,9 @@ bool SequentialReader::has_next()
         // We'll always need to remove the file extension
         remove_extension(*current_file_iterator_);
         if (file_is_compressed_) {
-          ROSBAG2_LOG_INFO("Decompressing file.");
           // Remove it again b/c we have 2 extensions: file and compression
           remove_extension(*current_file_iterator_);
-          std::string relative_compressed_file_path;
-          decompressor_->uri_to_relative_path(*current_file_iterator_,
-            relative_compressed_file_path);
-          decompressor_->decompress_file(relative_compressed_file_path);
+          decompress_uri(*current_file_iterator_);
         }
         /// End POC
         storage_ = storage_factory_->open_read_only(*current_file_iterator_, storage_options_.storage_id);
@@ -198,5 +206,7 @@ std::vector<TopicMetadata> SequentialReader::get_all_topics_and_types()
   }
   throw std::runtime_error("Bag is not open. Call open() before getting all topics.");
 }
+
+
 
 }  // namespace rosbag2

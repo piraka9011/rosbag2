@@ -15,6 +15,7 @@
 
 #include "rosbag2/compressor_poc.hpp"
 
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <fstream>
@@ -37,11 +38,12 @@ namespace rosbag2
  */
 std::string CompressorPoC::compress_uri(const std::string & uri)
 {
+  auto start = std::chrono::high_resolution_clock::now();
   std::string decompressed_buffer;
   std::string compressed_buffer;
   std::string compressed_uri = uri_to_compressed_uri(uri);
   std::ifstream infile(uri);
-  ROSBAG2_LOG_INFO_STREAM("Compressing " << uri << " to " << compressed_uri);
+  ROSBAG2_LOG_DEBUG_STREAM("Compressing " << uri << " to " << compressed_uri);
   if (infile.is_open()) {
     // Get size and allocate
     infile.seekg(0, std::ios::end);
@@ -55,8 +57,11 @@ std::string CompressorPoC::compress_uri(const std::string & uri)
     //  https://github.com/facebook/zstd/blob/dev/examples/streaming_compression.c
     size_t result = snappy::Compress(decompressed_buffer.c_str(), decompressed_buffer_length,
                                      &compressed_buffer);
-    ROSBAG2_LOG_INFO_STREAM("Size Before: " << decompressed_buffer_length << " B" <<
-                                            "\n\t\t   Size After: " << result << " B");
+    auto compression_ratio = (float)decompressed_buffer_length / (float)result;
+    ROSBAG2_LOG_INFO("----- File Compression Results ----");
+    ROSBAG2_LOG_INFO_STREAM("Size Before: " << decompressed_buffer_length << " B");
+    ROSBAG2_LOG_INFO_STREAM("Size After: " << result << " B");
+    ROSBAG2_LOG_INFO_STREAM("Compression ratio: " << compression_ratio);
     // If the compression above fails, should throw
     /// End abstraction
     infile.close();
@@ -68,6 +73,10 @@ std::string CompressorPoC::compress_uri(const std::string & uri)
     }
     outfile << compressed_buffer;
     outfile.close();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    ROSBAG2_LOG_INFO_STREAM("Compression took " << duration.count() << " microseconds");
+    ROSBAG2_LOG_INFO("-----------------------------------");
     return compressed_uri;
   }
   std::stringstream err;
@@ -87,25 +96,32 @@ std::string CompressorPoC::uri_to_compressed_uri(const std::string & uri)
 }
 
 std::shared_ptr<SerializedBagMessage> CompressorPoC::compress_bag_message_data(
-  std::shared_ptr<SerializedBagMessage> & to_compress)
+  std::shared_ptr<SerializedBagMessage> & decompressed_message)
 {
+  auto start = std::chrono::high_resolution_clock::now();
+  size_t decompressed_buffer_length = decompressed_message->serialized_data->buffer_length;
+  uint8_t * decompressed_buffer = decompressed_message->serialized_data->buffer;
+  size_t compressed_length = ZSTD_compressBound(decompressed_buffer_length);
+  uint8_t * compressed_buffer = new uint8_t[compressed_length];
 
-  size_t length = to_compress->serialized_data->buffer_length;
-  size_t compress_bound = ZSTD_compressBound(length);
-  uint8_t * compressed_data = new uint8_t[compress_bound];
-
-  size_t compressed_size = ZSTD_compress(compressed_data, compress_bound,
-    to_compress->serialized_data->buffer, length, 1);
-
-  std::cout << "compress_bag_message_data: original length=" << length <<
-    ", compressed length=" << compressed_size << ", ratio=" <<
-  (float)length / (float)compressed_size << std::endl;
+  size_t compressed_size = ZSTD_compress(compressed_buffer, compressed_length,
+                                         decompressed_buffer, decompressed_buffer_length, 1);
+  if (ZSTD_isError(compressed_size)) {
+    ROSBAG2_LOG_WARN("Unable to compress message. Not compressing.");
+    return decompressed_message;
+  }
+  auto compression_ratio = (float)decompressed_buffer_length / (float)compressed_size;
+  ROSBAG2_LOG_INFO_STREAM("Message size before: " << decompressed_buffer_length << " B");
+  ROSBAG2_LOG_INFO_STREAM("Message size after: " << compressed_size << " B");
+  ROSBAG2_LOG_INFO_STREAM("Compression ratio: " << compression_ratio);
 
   // TODO(piraka9011) Leaking memory :))))
-  to_compress->serialized_data->buffer = compressed_data;
-  to_compress->serialized_data->buffer_length = compress_bound;
-
-  return to_compress;
+  decompressed_message->serialized_data->buffer = compressed_buffer;
+  decompressed_message->serialized_data->buffer_length = compressed_length;
+  auto end = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  ROSBAG2_LOG_INFO_STREAM("Message compression took " << duration.count() << " microseconds");
+  return decompressed_message;
 }
 
 std::string CompressorPoC::get_compression_identifier() const

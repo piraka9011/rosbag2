@@ -44,7 +44,7 @@ public:
   std::string uri_to_compressed_uri(const std::string & uri) override;
 
   std::shared_ptr<SerializedBagMessage> compress_bag_message_data(
-    std::shared_ptr<SerializedBagMessage> & to_compress) override;
+    std::shared_ptr<SerializedBagMessage> & decompressed_message) override;
 
   std::string get_compression_identifier() const override;
 

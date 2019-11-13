@@ -13,6 +13,7 @@
  * permissions and limitations under the License.
  */
 
+#include <chrono>
 #include <iostream>
 
 #include "rosbag2/decompressor_poc.hpp"
@@ -33,13 +34,19 @@ namespace rosbag2
 void DecompressorPoC::uri_to_relative_path(
   const std::string & uri, std::string & new_uri)
 {
-  // TODO(piraka9011) database extension hardcoded for PoC
+  // TODO(piraka9011) Storage extension hardcoded for PoC
   new_uri = uri + ".db3" + ".compressed_poc";
+}
+
+std::string DecompressorPoC::uri_to_relative_path(const std::string & uri)
+{
+  return uri + ".db3" + ".compressed_poc";
 }
 
 std::string DecompressorPoC::decompress_file(const std::string & uri)
 {
-  ROSBAG2_LOG_INFO_STREAM("Decompressing file: " << uri);
+  ROSBAG2_LOG_DEBUG_STREAM("Decompressing file: " << uri);
+  auto start = std::chrono::high_resolution_clock::now();
   std::ifstream infile(uri);
   std::string compressed_buffer;
   std::string decompressed_buffer;
@@ -54,7 +61,7 @@ std::string DecompressorPoC::decompress_file(const std::string & uri)
     // Decompress
     bool result = snappy::Uncompress(compressed_buffer.c_str(), compressed_buffer_length,
       &decompressed_buffer);
-    ROSBAG2_LOG_INFO_STREAM("Result: " << std::boolalpha << result);
+    ROSBAG2_LOG_DEBUG_STREAM("Result: " << std::boolalpha << result);
     infile.close();
     if (!result){
       std::stringstream err;
@@ -64,7 +71,6 @@ std::string DecompressorPoC::decompress_file(const std::string & uri)
     // Remove .compress extension and write to file.
     std::string decompressed_uri = uri;
     remove_extension(decompressed_uri);
-    ROSBAG2_LOG_INFO_STREAM("decompressed_uri: " << decompressed_uri);
     std::ofstream outfile(decompressed_uri);
     if (!outfile.is_open()) {
       std::stringstream err;
@@ -73,6 +79,11 @@ std::string DecompressorPoC::decompress_file(const std::string & uri)
     }
     outfile << decompressed_buffer;
     outfile.close();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    ROSBAG2_LOG_INFO("----- File Decompression Results ----");
+    ROSBAG2_LOG_INFO_STREAM("Decompression took " << duration.count() << " microseconds");
+    ROSBAG2_LOG_INFO("-------------------------------------");
     return decompressed_uri;
   }
   std::stringstream err;
@@ -84,6 +95,7 @@ std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_da
   std::shared_ptr<SerializedBagMessage> & to_decompress)
 {
   ROSBAG2_LOG_DEBUG("Decompressing message");
+  auto start = std::chrono::high_resolution_clock::now();
   size_t length = to_decompress->serialized_data->buffer_length;
   uint8_t * buffer = to_decompress->serialized_data->buffer;
 
@@ -107,6 +119,9 @@ std::shared_ptr<SerializedBagMessage> DecompressorPoC::decompress_bag_message_da
   // TODO(piraka9011) Leaking memory :)))) std::copy, memcpy, etc.
   to_decompress->serialized_data->buffer = decompressed_buffer;
   to_decompress->serialized_data->buffer_length = decompress_bound;
+  auto end = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+  ROSBAG2_LOG_INFO_STREAM("Message decompression took " << duration.count() << " microseconds");
   return to_decompress;
 }
 
