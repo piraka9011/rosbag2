@@ -58,16 +58,23 @@ std::string DecompressorPoC::decompress_file(const std::string & uri)
     // Go back and read in contents
     infile.seekg(0, std::ios::beg);
     infile.read(&compressed_buffer[0], compressed_buffer.size());
-    // Decompress
-    bool result = snappy::Uncompress(compressed_buffer.c_str(), compressed_buffer_length,
-      &decompressed_buffer);
-    ROSBAG2_LOG_DEBUG_STREAM("Result: " << std::boolalpha << result);
-    infile.close();
-    if (!result){
-      std::stringstream err;
-      err << "Unable to decompress: " << uri;
-      throw std::runtime_error(err.str());
+    /// Decompress
+    // Snappy
+//    bool result = snappy::Uncompress(compressed_buffer.c_str(), compressed_buffer_length,
+//      &decompressed_buffer);
+//    ROSBAG2_LOG_DEBUG_STREAM("Result: " << std::boolalpha << result);
+//    if (!result){
+//      std::stringstream err;
+//      err << "Unable to decompress: " << uri;
+//      throw std::runtime_error(err.str());
+//    }
+    size_t const decompressed_size = ZSTD_decompress(
+      &decompressed_buffer, decompressed_buffer.size(),
+      compressed_buffer.c_str(), compressed_buffer.size());
+    if (ZSTD_isError(decompressed_size)) {
+      ROSBAG2_LOG_WARN_STREAM("ZSTD Error: " << ZSTD_getErrorName(decompressed_size));
     }
+    infile.close();
     // Remove .compress extension and write to file.
     std::string decompressed_uri = uri;
     remove_extension(decompressed_uri);

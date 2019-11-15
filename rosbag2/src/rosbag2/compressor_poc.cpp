@@ -38,29 +38,41 @@ namespace rosbag2
  */
 std::string CompressorPoC::compress_uri(const std::string & uri)
 {
+  ROSBAG2_LOG_INFO("----- File Compression Results ----");
   auto start = std::chrono::high_resolution_clock::now();
   std::string decompressed_buffer;
   std::string compressed_buffer;
   std::string compressed_uri = uri_to_compressed_uri(uri);
   std::ifstream infile(uri);
-  ROSBAG2_LOG_DEBUG_STREAM("Compressing " << uri << " to " << compressed_uri);
+  ROSBAG2_LOG_INFO_STREAM("Compressing " << uri);
   if (infile.is_open()) {
     // Get size and allocate
     infile.seekg(0, std::ios::end);
     size_t decompressed_buffer_length = infile.tellg();
     decompressed_buffer.resize(decompressed_buffer_length);
+    ROSBAG2_LOG_INFO_STREAM("Size Before: " << decompressed_buffer_length << " B");
     // Go back and read in contents
     infile.seekg(0, std::ios::beg);
-    infile.read(&decompressed_buffer[0], decompressed_buffer.size());
+    infile.read(&decompressed_buffer[0], decompressed_buffer_length);
+    ROSBAG2_LOG_INFO("Loaded decompressed data.");
     // TODO(dabonnie) call abstract implementation method that wraps the specific API
     // TODO(dabonnie) ZSTD Streaming:
     //  https://github.com/facebook/zstd/blob/dev/examples/streaming_compression.c
-    size_t result = snappy::Compress(decompressed_buffer.c_str(), decompressed_buffer_length,
-                                     &compressed_buffer);
-    auto compression_ratio = (float)decompressed_buffer_length / (float)result;
-    ROSBAG2_LOG_INFO("----- File Compression Results ----");
-    ROSBAG2_LOG_INFO_STREAM("Size Before: " << decompressed_buffer_length << " B");
-    ROSBAG2_LOG_INFO_STREAM("Size After: " << result << " B");
+//    size_t compressed_size = snappy::Compress(decompressed_buffer.c_str(), decompressed_buffer_length,
+//                                              &compressed_buffer);
+    size_t const compressed_buffer_length = ZSTD_compressBound(decompressed_buffer.size());
+    compressed_buffer.resize(compressed_buffer_length);
+    ROSBAG2_LOG_INFO_STREAM("Compressed buffer length: " << compressed_buffer_length);
+    size_t const compressed_size = ZSTD_compress(&compressed_buffer, compressed_buffer.size(),
+      &decompressed_buffer[0], decompressed_buffer.size(), 1);
+    ROSBAG2_LOG_INFO_STREAM("Compressed size: " << compressed_size);
+    if (ZSTD_isError(compressed_size)) {
+      std::stringstream err;
+      err << "ZSTD Error: " << ZSTD_getErrorName(compressed_size);
+      throw std::runtime_error(err.str());
+    }
+    ROSBAG2_LOG_INFO_STREAM("Size After: " << compressed_size << " B");
+    auto compression_ratio = (float)decompressed_buffer_length / (float)compressed_size;
     ROSBAG2_LOG_INFO_STREAM("Compression ratio: " << compression_ratio);
     // If the compression above fails, should throw
     /// End abstraction
