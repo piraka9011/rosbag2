@@ -25,6 +25,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rcpputils REQUIRED)
 find_package(rcutils REQUIRED)
+find_package(rosbag2_cpp REQUIRED)
 find_package(rosbag2_storage REQUIRED)
 find_package(zstd_vendor REQUIRED)
 
@@ -48,12 +49,27 @@ target_compile_definitions(${PROJECT_NAME}_zstd
   PRIVATE
   ROSBAG2_COMPRESSION_BUILDING_DLL)
 
+add_library(sequential_compressor_writer
+  SHARED
+  src/rosbag2_compression/sequential_compressor_writer.cpp)
+target_include_directories(sequential_compressor_writer
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_link_libraries(sequential_compressor_writer ${PROJECT_NAME}_zstd)
+ament_target_dependencies(sequential_compressor_writer
+  rcpputils
+  rcutils
+  rosbag2_cpp
+  rosbag2_storage)
+target_compile_definitions(sequential_compressor_writer PRIVATE "ROSBAG2_CPP_BUILDING_DLL")
+
 install(
   DIRECTORY include/
   DESTINATION include)
 
 install(
-  TARGETS ${PROJECT_NAME}_zstd
+  TARGETS ${PROJECT_NAME}_zstd sequential_compressor_writer
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin)
